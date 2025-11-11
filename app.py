@@ -334,7 +334,7 @@ class RealDataIntegration:
                 params = {
                     'season': season_year,
                     'status': 'FINISHED',
-                    'limit': 200  # Get more matches
+                    'limit': 100  # Reduced limit to avoid rate limiting
                 }
                 
                 response = requests.get(url, headers=self.headers, params=params, timeout=15)
@@ -349,14 +349,20 @@ class RealDataIntegration:
                     break
                 else:
                     print(f"❌ API Error {response.status_code} for {league} {season_year}")
+                    # Return empty to use fallback
+                    return pd.DataFrame()
                     
         except Exception as e:
             print(f"❌ Historical data fetch error: {e}")
+            return pd.DataFrame()
         
         return self._process_real_match_data(matches)
     
     def _process_real_match_data(self, matches):
         """Process real API data into structured format"""
+        if not matches:
+            return pd.DataFrame()
+            
         processed_data = []
         
         for match in matches:
@@ -416,7 +422,8 @@ class DynamicDataManager:
             params = {
                 'status': 'SCHEDULED',
                 'dateFrom': datetime.now().strftime('%Y-%m-%d'),
-                'dateTo': (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
+                'dateTo': (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d'),
+                'limit': 20  # Reduced limit
             }
             
             headers = {'X-Auth-Token': Config.FOOTBALL_API_KEY}
@@ -427,26 +434,31 @@ class DynamicDataManager:
                 real_fixtures = []
                 
                 for match in data.get('matches', []):
-                    real_fixtures.append({
-                        'id': str(match['id']),
-                        'home_team': match['homeTeam']['name'],
-                        'away_team': match['awayTeam']['name'],
-                        'league': league,
-                        'date': match['utcDate'][:10],
-                        'venue': match.get('venue', {}).get('name', 'Unknown Stadium')
-                    })
+                    try:
+                        real_fixtures.append({
+                            'id': str(match['id']),
+                            'home_team': match['homeTeam']['name'],
+                            'away_team': match['awayTeam']['name'],
+                            'league': league,
+                            'date': match['utcDate'][:10],
+                            'venue': match.get('venue', {}).get('name', 'Unknown Stadium')
+                        })
+                    except Exception as e:
+                        continue
                 
-                print(f"✅ Loaded {len(real_fixtures)} REAL fixtures for {league}")
-                return real_fixtures
+                if real_fixtures:
+                    print(f"✅ Loaded {len(real_fixtures)} REAL fixtures for {league}")
+                    return real_fixtures
+                else:
+                    print("⚠️ No fixtures found in API response")
+                    return self._generate_fallback_fixtures(league, days)
             else:
                 print(f"❌ Fixtures API returned {response.status_code}")
+                return self._generate_fallback_fixtures(league, days)
                 
         except Exception as e:
             print(f"❌ Fixtures API failed: {e}")
-        
-        # Fallback to generated fixtures if API fails
-        print("⚠️ Using fallback fixtures")
-        return self._generate_fallback_fixtures(league, days)
+            return self._generate_fallback_fixtures(league, days)
     
     def _generate_fallback_fixtures(self, league: str, days: int) -> List[Dict]:
         """Generate fallback fixtures when API fails"""
@@ -464,19 +476,24 @@ class DynamicDataManager:
         league_teams = teams.get(league, teams['EPL'])
         fixtures = []
         
-        for i in range(min(8, len(league_teams) // 2)):
-            home_team = league_teams[i * 2]
-            away_team = league_teams[i * 2 + 1]
-            
-            fixtures.append({
-                'id': f"{league}_{i+1}",
-                'home_team': home_team,
-                'away_team': away_team,
-                'league': league,
-                'date': (datetime.now() + timedelta(days=i % days)).strftime('%Y-%m-%d'),
-                'venue': f"{home_team} Stadium"
-            })
+        # Create more realistic fixture pairs
+        for i in range(min(6, len(league_teams) // 2)):
+            home_idx = i * 2
+            away_idx = i * 2 + 1
+            if away_idx < len(league_teams):
+                home_team = league_teams[home_idx]
+                away_team = league_teams[away_idx]
+                
+                fixtures.append({
+                    'id': f"{league}_{i+1}",
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'league': league,
+                    'date': (datetime.now() + timedelta(days=(i % days) + 1)).strftime('%Y-%m-%d'),
+                    'venue': f"{home_team} Stadium"
+                })
         
+        print(f"⚠️ Generated {len(fixtures)} fallback fixtures for {league}")
         return fixtures
 
 class RealOddsIntegration:
@@ -613,7 +630,7 @@ class AdvancedFootballPredictor:
         
         real_historical_matches = self._load_real_historical_data()
         
-        if real_historical_matches:
+        if real_historical_matches and len(real_historical_matches) > 10:
             print(f"✅ Training ELO system with {len(real_historical_matches)} REAL matches")
             for match in real_historical_matches:
                 self.elo_system.update_ratings(
@@ -657,7 +674,7 @@ class AdvancedFootballPredictor:
                 'Tottenham', 'Newcastle', 'Brighton', 'West Ham', 'Aston Villa']
         
         # Generate more realistic historical data
-        for i in range(300):
+        for i in range(100):  # Reduced number for faster initialization
             home_team = np.random.choice(teams)
             away_team = np.random.choice([t for t in teams if t != home_team])
             
@@ -700,7 +717,7 @@ class AdvancedFootballPredictor:
             # Prepare training data from REAL matches
             X, y = self._prepare_training_data()
             
-            if len(X) < 30:
+            if len(X) < 20:  # Reduced minimum requirement
                 print("⚠️ Insufficient training data, using fallback model")
                 self._train_fallback_model()
                 return
@@ -708,18 +725,18 @@ class AdvancedFootballPredictor:
             # Advanced ensemble
             self.model = VotingClassifier(estimators=[
                 ('xgb', xgb.XGBClassifier(
-                    n_estimators=100,
+                    n_estimators=50,  # Reduced for faster training
                     max_depth=4,
                     learning_rate=0.1,
                     random_state=42
                 )),
                 ('rf', RandomForestClassifier(
-                    n_estimators=100,
+                    n_estimators=50,  # Reduced for faster training
                     max_depth=5,
                     random_state=42
                 )),
                 ('gbc', GradientBoostingClassifier(
-                    n_estimators=100,
+                    n_estimators=50,  # Reduced for faster training
                     max_depth=4,
                     learning_rate=0.1,
                     random_state=42
@@ -770,7 +787,7 @@ class AdvancedFootballPredictor:
             except Exception as e:
                 continue
         
-        if valid_matches > 30:
+        if valid_matches > 20:  # Reduced minimum
             print(f"✅ Training on {valid_matches} REAL historical matches!")
             y_encoded = self.label_encoder.fit_transform(y)
             return np.array(X), y_encoded
@@ -787,7 +804,7 @@ class AdvancedFootballPredictor:
         if not teams:
             teams = ['Team_A', 'Team_B', 'Team_C', 'Team_D', 'Team_E']
         
-        for _ in range(200):
+        for _ in range(100):  # Reduced for faster training
             home_team = np.random.choice(teams)
             away_team = np.random.choice([t for t in teams if t != home_team])
             
@@ -818,7 +835,7 @@ class AdvancedFootballPredictor:
         """Fallback to simpler model"""
         try:
             X, y = self._prepare_synthetic_training_data()
-            self.model = RandomForestClassifier(n_estimators=50, random_state=42)
+            self.model = RandomForestClassifier(n_estimators=30, random_state=42)  # Reduced
             X_scaled = self.scaler.fit_transform(X)
             self.model.fit(X_scaled, y)
             self.is_trained = True
@@ -1175,7 +1192,8 @@ def render_live_predictions():
                     
                     display_prediction_results(prediction)
         else:
-            st.warning("No fixtures available. Check your API connection.")
+            st.warning("No fixtures available. The system is using fallback data.")
+            st.info("Try using the Quick Predict feature on the right with popular teams like 'Man City' vs 'Liverpool'")
     
     with col2:
         st.subheader("📋 Quick Predict")
@@ -1208,6 +1226,8 @@ def render_live_predictions():
                     st.write(f"🎯 {pred['prediction']} ({pred['confidence']:.0%})")
                     st.progress(pred['confidence'])
                     st.markdown("---")
+        else:
+            st.info("No predictions yet. Make your first prediction!")
 
 def render_fixtures_view():
     """Dynamic fixtures view with REAL predictions"""
@@ -1233,7 +1253,7 @@ def render_fixtures_view():
         all_fixtures.extend(fixtures)
     
     if not all_fixtures:
-        st.info("No fixtures found. The API might be rate-limited or unavailable.")
+        st.info("No fixtures found. The system is using fallback data. Try the Live Predictions tab for manual predictions.")
         return
     
     # Display fixtures
@@ -1276,7 +1296,7 @@ def render_team_analytics():
     # Team selector
     teams = list(st.session_state.predictor.elo_system.team_ratings.keys())
     if not teams:
-        st.info("No team data available. Please generate predictions first.")
+        st.info("No team data available. Please generate some predictions first.")
         return
     
     selected_team = st.selectbox("Select Team:", sorted(teams))
@@ -1304,18 +1324,23 @@ def render_team_analytics():
         # Show match history
         st.subheader("Recent Match History")
         if selected_team in st.session_state.predictor.elo_system.team_history:
-            history = st.session_state.predictor.elo_system.team_history[selected_team][-10:]
+            history = st.session_state.predictor.elo_system.team_history[selected_team][-5:]  # Show last 5
             for match in reversed(history):
                 result = "W" if match['points'] == 3 else "D" if match['points'] == 1 else "L"
                 st.write(f"{result} | GF: {match['goals_for']} GA: {match['goals_against']} | ELO: {match['rating']:.0f}")
+        else:
+            st.write("No recent match history available.")
 
 def render_model_performance():
     """Model performance monitoring dashboard"""
     st.header("📈 Model Performance Analytics")
     
+    # Initialize real_data_ratio with default value
+    real_data_ratio = 0.0
+    
     # Real performance metrics based on predictions
     if hasattr(st.session_state, 'predictions') and st.session_state.predictions:
-        recent_predictions = st.session_state.predictions[-50:]  # Last 50 predictions
+        recent_predictions = st.session_state.predictions[-20:]  # Last 20 predictions
         
         if recent_predictions:
             # Calculate real metrics
@@ -1370,7 +1395,7 @@ def render_value_bets():
     # Generate sample value bets based on recent predictions
     value_bets = []
     if hasattr(st.session_state, 'predictions') and st.session_state.predictions:
-        for pred in st.session_state.predictions[-20:]:
+        for pred in st.session_state.predictions[-10:]:  # Reduced to last 10
             if pred['value_edge'] > 0.05:  # Only show bets with significant edge
                 value_bets.append({
                     'match': f"{pred['home_team']} vs {pred['away_team']}",
@@ -1535,11 +1560,22 @@ def main():
     st.markdown('<h1 class="main-header">⚽ Pro Football Oracle</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Advanced AI-Powered Football Predictions • Real API Data • Professional Analytics</p>', unsafe_allow_html=True)
     
+    # Initialize session state for predictions if not exists
+    if 'predictions' not in st.session_state:
+        st.session_state.predictions = []
+    
     # Initialize advanced predictor and data manager
     if 'predictor' not in st.session_state:
         with st.spinner("🚀 Initializing Advanced Prediction System with REAL APIs..."):
-            st.session_state.predictor = AdvancedFootballPredictor()
-            st.session_state.data_manager = DynamicDataManager()
+            try:
+                st.session_state.predictor = AdvancedFootballPredictor()
+                st.session_state.data_manager = DynamicDataManager()
+                st.success("✅ System initialized successfully!")
+            except Exception as e:
+                st.error(f"❌ System initialization failed: {e}")
+                # Create a basic predictor as fallback
+                st.session_state.predictor = AdvancedFootballPredictor()
+                st.session_state.data_manager = DynamicDataManager()
     
     # Show API status
     try:
