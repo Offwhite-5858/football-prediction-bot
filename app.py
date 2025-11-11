@@ -1030,4 +1030,79 @@ def main():
         st.header("About This Bot")
         
         st.markdown("""
-        ### ⚽ Advanced Football Prediction Bot 
+        ### ⚽ Advanced Football Prediction Bot
+        
+        This is a **production-ready** football prediction system that uses real data and machine learning to identify value betting opportunities.
+        
+        **🎯 Key Features:**
+        - **Real Data Integration** - Historical match data from football APIs
+        - **Machine Learning** - Random Forest algorithm trained on real matches
+        - **Value Detection** - Identifies positive expected value bets
+        - **Smart Staking** - Kelly Criterion for optimal bet sizing
+        - **Live Odds** - Real-time odds comparison
+        - **Performance Tracking** - Detailed analytics and history
+        
+        **📊 Data Sources:**
+        - Football-Data.org API for historical matches
+        - The Odds API for live betting odds
+        - Advanced feature engineering from team statistics
+        
+        **🔧 Model Details:**
+        - **Algorithm**: Random Forest Classifier
+        - **Training**: Cross-validated on historical data
+        - **Features**: 11 performance metrics per team
+        - **Updates**: Automatic retraining with new data
+        
+        **🚀 Getting Started:**
+        1. **Get API Keys** (optional but recommended):
+           - [Football-Data.org](https://www.football-data.org/)
+           - [The Odds API](https://the-odds-api.com/)
+        2. **Set environment variables**:
+           - `FOOTBALL_DATA_API_KEY=your_key_here`
+           - `ODDS_API_KEY=your_key_here`
+        3. **Start predicting** in the Predict tab!
+        
+        **💡 Pro Tips:**
+        - Look for predictions with **positive value edge** (>2%)
+        - Consider **confidence levels** above 60%
+        - Use **recommended stakes** for bankroll management
+        - Monitor **model performance** in the History tab
+        """)
+        
+        # API configuration
+        with st.expander("🔑 API Configuration Guide"):
+            st.markdown("""
+            ### Setting Up APIs for Real Data
+            
+            **1. Football-Data.org API:**
+            - Visit: https://www.football-data.org/
+            - Register for free account
+            - Get API key from dashboard
+            - Free tier: 10 requests per minute
+            
+            **2. The Odds API:**
+            - Visit: https://the-odds-api.com/
+            - Sign up for free account  
+            - Get API key from account section
+            - Free tier: 500 requests/month
+            
+            **3. Environment Variables:**
+            ```bash
+            # On your deployment platform, set:
+            FOOTBALL_DATA_API_KEY=your_football_data_key
+            ODDS_API_KEY=your_odds_api_key
+            ```
+            
+            **4. Without APIs:**
+            The system will work with estimated data and fallback odds, but real APIs significantly improve accuracy.
+            """)
+        
+        st.success("""
+        ✅ **System Status**: Production Ready  
+        🔧 **Data Quality**: Real API Integration Available  
+        📱 **Mobile Optimized**: Responsive Design  
+        🚀 **Deployment Ready**: Cloud Compatible
+        """)
+
+if __name__ == "__main__":
+    main() 
