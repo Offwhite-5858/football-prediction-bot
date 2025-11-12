@@ -28,8 +28,8 @@ class Config:
     DATABASE_PATH = f"{DATA_PATH}/predictions.db"
     
     # Your API Keys
-    FOOTBALL_DATA_API = "3292bc6b3ad4459fa739ede03966a02c"
-    ODDS_API_KEY = "8eebed5664851eb764da554b65c5f179"
+    FOOTBALL_DATA_API = "3292bc6b3ad4459fa739ede03966a02b"
+    ODDS_API_KEY = "8eebed5664851eb764da554b65c5f171"
     
     # 2025 Season
     CURRENT_SEASON = 2025
