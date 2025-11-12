@@ -17,8 +17,8 @@ class Config:
     DATABASE_PATH = f"{DATA_PATH}/predictions.db"
     
     # Your REAL API Keys
-    FOOTBALL_API_KEY = "3292bc6b3ad4459fa739ede03966a02c"
-    ODDS_API_KEY = "8eebed5664851eb764da554b65c5f179"
+    FOOTBALL_API_KEY = "3292bc6b3ad4459fa739ede03966a02b"
+    ODDS_API_KEY = "8eebed5664851eb764da554b65c5f171"
     
     # API Football (free alternative with more leagues)
     API_FOOTBALL_KEY = "YOUR_API_FOOTBALL_KEY"  # Get from https://www.api-football.com/
