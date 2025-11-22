@@ -18,6 +18,7 @@ from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, classification_report
+from sklearn.ensemble import VotingClassifier  # Missing import!
 import xgboost as xgb
 import joblib
 
