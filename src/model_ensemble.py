@@ -7,6 +7,20 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report
 import xgboost as xgb
 import warnings
+import sys
+import os
+
+# FIX: Add parent directory to path
+current_dir = os.path.dirname(__file__)
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+from config import Config
+from utils.database import DatabaseManager
+
+warnings.filterwarnings('ignore')
+
+# Rest of your code remains the same...
 warnings.filterwarnings('ignore')
 
 from config import Config
