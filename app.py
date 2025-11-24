@@ -8,6 +8,8 @@ from plotly.subplots import make_subplots
 import warnings
 import sys
 import os
+import sqlite3
+import json
 
 # Add the src and utils directories to Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -22,6 +24,164 @@ try:
 except ImportError as e:
     st.error(f"Import Error: {e}")
     st.info("Please make sure all required files are in the correct directories")
+
+class DatabaseHealthCheck:
+    """Simple database health check embedded in the app"""
+    
+    def __init__(self, db_manager):
+        self.db = db_manager
+    
+    def run_health_check(self):
+        """Run comprehensive database health check"""
+        st.title("🔍 Database Health Check")
+        st.markdown("Verify database tables and initialize if needed")
+        
+        # Database Status
+        st.subheader("📊 Database Status")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            db_exists = os.path.exists("database/predictions.db")
+            st.metric("Database File", "✅ Found" if db_exists else "❌ Missing")
+        
+        with col2:
+            db_size = os.path.getsize("database/predictions.db") if db_exists else 0
+            st.metric("Database Size", f"{db_size / 1024:.1f} KB")
+        
+        with col3:
+            table_count = self._get_table_count()
+            st.metric("Tables Found", table_count)
+        
+        # Table Verification
+        st.subheader("📋 Table Verification")
+        
+        required_tables = [
+            'matches', 'predictions', 'prediction_errors'
+        ]
+        
+        table_status = []
+        for table in required_tables:
+            exists = self._check_table_exists(table)
+            count = self._get_table_row_count(table) if exists else 0
+            table_status.append({
+                'table': table,
+                'exists': exists,
+                'row_count': count,
+                'status': '✅' if exists else '❌'
+            })
+        
+        # Display table status
+        status_df = pd.DataFrame(table_status)
+        st.dataframe(status_df, use_container_width=True)
+        
+        # Initialize Database Section
+        st.subheader("🛠️ Database Initialization")
+        
+        if st.button("🔄 Initialize All Tables", type="primary"):
+            with st.spinner("Initializing database tables..."):
+                success = self._initialize_all_tables()
+                if success:
+                    st.success("✅ All tables initialized successfully!")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to initialize tables")
+        
+        # Add Sample Data Section
+        st.subheader("📝 Sample Data")
+        
+        if st.button("➕ Add Sample Predictions"):
+            self._add_sample_predictions()
+            st.success("✅ Sample predictions added!")
+            st.rerun()
+    
+    def _get_table_count(self):
+        """Get number of tables in database"""
+        try:
+            conn = self.db._get_connection()
+            result = conn.execute("""
+                SELECT COUNT(*) FROM sqlite_master 
+                WHERE type='table' AND name NOT LIKE 'sqlite_%'
+            """).fetchone()
+            conn.close()
+            return result[0] if result else 0
+        except:
+            return 0
+    
+    def _check_table_exists(self, table_name):
+        """Check if a table exists"""
+        try:
+            conn = self.db._get_connection()
+            result = conn.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name=?
+            """, (table_name,)).fetchone()
+            conn.close()
+            return result is not None
+        except:
+            return False
+    
+    def _get_table_row_count(self, table_name):
+        """Get row count for a table"""
+        try:
+            conn = self.db._get_connection()
+            result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+            conn.close()
+            return result[0] if result else 0
+        except:
+            return 0
+    
+    def _initialize_all_tables(self):
+        """Initialize all database tables"""
+        try:
+            # Re-initialize the database
+            self.db._init_database()
+            return True
+        except Exception as e:
+            st.error(f"Error initializing tables: {e}")
+            return False
+    
+    def _add_sample_predictions(self):
+        """Add sample prediction data for testing"""
+        conn = self.db._get_connection()
+        
+        try:
+            # Add sample matches
+            sample_matches = [
+                ('match_001', 'Manchester City', 'Liverpool', 'Premier League', '2024-03-10', 'H'),
+                ('match_002', 'Arsenal', 'Chelsea', 'Premier League', '2024-03-09', 'D'),
+                ('match_003', 'Real Madrid', 'Barcelona', 'La Liga', '2024-03-08', 'A')
+            ]
+            
+            for match in sample_matches:
+                conn.execute('''
+                    INSERT OR IGNORE INTO matches 
+                    (match_id, home_team, away_team, league, match_date, result)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', match)
+            
+            # Add sample predictions
+            sample_predictions = [
+                ('match_001', 'match_outcome', '{"prediction": "H", "confidence": 0.75}', 0.75, 'v2.1', '{}', 85),
+                ('match_002', 'match_outcome', '{"prediction": "D", "confidence": 0.65}', 0.65, 'v2.1', '{}', 80),
+                ('match_003', 'match_outcome', '{"prediction": "A", "confidence": 0.70}', 0.70, 'v2.1', '{}', 78)
+            ]
+            
+            for pred in sample_predictions:
+                conn.execute('''
+                    INSERT OR IGNORE INTO predictions 
+                    (match_id, prediction_type, prediction_data, confidence, model_version, features_used, data_quality_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', pred)
+            
+            conn.commit()
+            st.success("✅ Sample data added successfully!")
+            
+        except Exception as e:
+            st.error(f"Error adding sample data: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
 
 class ProductionFootballPredictor:
     def __init__(self):
@@ -289,33 +449,43 @@ class ProductionFootballPredictor:
             </div>
             """, unsafe_allow_html=True)
             
-            # Prediction results
+            # Prediction results - with safe key access
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                main_pred = prediction['predictions']['match_outcome']
-                st.metric("AI Prediction", main_pred['prediction'])
-                st.metric("Confidence", f"{main_pred['confidence']:.1%}")
+                main_pred = prediction['predictions'].get('match_outcome', {})
+                pred_value = main_pred.get('prediction', 'Unknown')
+                confidence = main_pred.get('confidence', 0.5)
+                st.metric("AI Prediction", pred_value)
+                st.metric("Confidence", f"{confidence:.1%}")
             
             with col2:
-                dc_pred = prediction['predictions']['double_chance']
-                st.metric("Double Chance", dc_pred['recommendation'])
-                st.metric("Probability", f"{dc_pred['confidence']:.1%}")
+                dc_pred = prediction['predictions'].get('double_chance', {})
+                dc_rec = dc_pred.get('recommendation', 'Unknown')
+                dc_conf = dc_pred.get('confidence', 0.5)
+                st.metric("Double Chance", dc_rec)
+                st.metric("Probability", f"{dc_conf:.1%}")
             
             with col3:
-                ou_pred = prediction['predictions']['over_under']
-                st.metric("Over/Under", ou_pred['recommendation'])
-                st.metric("Expected Goals", f"{ou_pred['expected_total_goals']:.1f}")
+                ou_pred = prediction['predictions'].get('over_under', {})
+                ou_rec = ou_pred.get('recommendation', 'Unknown')
+                goals = ou_pred.get('expected_total_goals', 2.5)
+                st.metric("Over/Under", ou_rec)
+                st.metric("Expected Goals", f"{goals:.1f}")
             
             with col4:
-                bts_pred = prediction['predictions']['both_teams_score']
-                st.metric("Both Teams Score", bts_pred['recommendation'])
-                st.metric("Probability", f"{bts_pred['yes']:.1%}")
+                bts_pred = prediction['predictions'].get('both_teams_score', {})
+                bts_rec = bts_pred.get('recommendation', 'Unknown')
+                bts_prob = bts_pred.get('yes', 0.5)
+                st.metric("Both Teams Score", bts_rec)
+                st.metric("Probability", f"{bts_prob:.1%}")
             
-            # Data quality
-            quality = prediction['data_quality']
-            quality_class = f"quality-{quality['level'].lower()}"
-            st.markdown(f"**Data Quality:** <span class='{quality_class}'>{quality['level']} ({quality['score']}/100)</span>", unsafe_allow_html=True)
+            # Data quality with safe access
+            quality = prediction.get('data_quality', {'level': 'Unknown', 'score': 0})
+            quality_level = quality.get('level', 'Unknown')
+            quality_score = quality.get('score', 0)
+            quality_class = f"quality-{quality_level.lower()}" if quality_level != 'Unknown' else "quality-moderate"
+            st.markdown(f"**Data Quality:** <span class='{quality_class}'>{quality_level} ({quality_score}/100)</span>", unsafe_allow_html=True)
             
             if st.button(f"📊 View Detailed Analysis", key=f"details_{index}"):
                 self.display_prediction_details(prediction)
@@ -326,49 +496,59 @@ class ProductionFootballPredictor:
         """Display detailed prediction analysis"""
         st.subheader("🔍 Detailed Prediction Analysis")
         
-        # Match info
+          # Match info
         col1, col2 = st.columns(2)
         with col1:
             st.write(f"**Match:** {prediction['home_team']} vs {prediction['away_team']}")
             st.write(f"**League:** {prediction['league']}")
         with col2:
-            st.write(f"**Data Quality:** {prediction['data_quality']['level']}")
-            st.write(f"**Live Data Used:** {prediction['use_live_data']}")
+            quality = prediction.get('data_quality', {'level': 'Unknown'})
+            st.write(f"**Data Quality:** {quality.get('level', 'Unknown')}")
+            st.write(f"**Live Data Used:** {prediction.get('use_live_data', False)}")
         
-        # Prediction tabs
+        # Prediction tabs with safe key access
         pred_tabs = st.tabs(["Match Outcome", "Double Chance", "Over/Under", "Both Teams Score", "Correct Score"])
         
         with pred_tabs[0]:
-            self.display_match_outcome_details(prediction['predictions']['match_outcome'])
+            match_pred = prediction['predictions'].get('match_outcome', {})
+            self.display_match_outcome_details(match_pred)
         
         with pred_tabs[1]:
-            self.display_double_chance_details(prediction['predictions']['double_chance'])
+            dc_pred = prediction['predictions'].get('double_chance', {})
+            self.display_double_chance_details(dc_pred)
         
         with pred_tabs[2]:
-            self.display_over_under_details(prediction['predictions']['over_under'])
+            ou_pred = prediction['predictions'].get('over_under', {})
+            self.display_over_under_details(ou_pred)
         
         with pred_tabs[3]:
-            self.display_both_teams_score_details(prediction['predictions']['both_teams_score'])
+            bts_pred = prediction['predictions'].get('both_teams_score', {})
+            self.display_both_teams_score_details(bts_pred)
         
         with pred_tabs[4]:
-            self.display_correct_score_details(prediction['predictions']['correct_score'])
+            cs_pred = prediction['predictions'].get('correct_score', {})
+            self.display_correct_score_details(cs_pred)
         
         # Data quality reasons
         with st.expander("📈 Data Quality Assessment"):
-            for reason in prediction['data_quality']['reasons']:
+            reasons = prediction.get('data_quality', {}).get('reasons', ['No quality assessment available'])
+            for reason in reasons:
                 st.write(reason)
     
     def display_match_outcome_details(self, prediction):
         """Display match outcome prediction details"""
         st.subheader("🎯 Match Outcome Prediction")
         
+        # Safe probability access
+        probs = prediction.get('probabilities', {'home': 0.33, 'draw': 0.34, 'away': 0.33})
+        
         # Probability visualization
         fig = go.Figure(data=[
             go.Bar(name='Probability', 
                   x=['Home Win', 'Draw', 'Away Win'], 
-                  y=[prediction['probabilities']['home'], 
-                     prediction['probabilities']['draw'], 
-                     prediction['probabilities']['away']])
+                  y=[probs.get('home', 0.33), 
+                     probs.get('draw', 0.34), 
+                     probs.get('away', 0.33)])
         ])
         fig.update_layout(title="Prediction Probabilities", yaxis_title="Probability")
         st.plotly_chart(fig, use_container_width=True)
@@ -376,18 +556,20 @@ class ProductionFootballPredictor:
         # Prediction details
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Home Win", f"{prediction['probabilities']['home']:.1%}")
+            st.metric("Home Win", f"{probs.get('home', 0.33):.1%}")
         with col2:
-            st.metric("Draw", f"{prediction['probabilities']['draw']:.1%}")
+            st.metric("Draw", f"{probs.get('draw', 0.34):.1%}")
         with col3:
-            st.metric("Away Win", f"{prediction['probabilities']['away']:.1%}")
+            st.metric("Away Win", f"{probs.get('away', 0.33):.1%}")
         
-        st.metric("Final Prediction", prediction['prediction'])
-        st.metric("Confidence Level", f"{prediction['confidence']:.1%}")
+        st.metric("Final Prediction", prediction.get('prediction', 'Unknown'))
+        st.metric("Confidence Level", f"{prediction.get('confidence', 0.5):.1%}")
         
-        # Bias check
-        if prediction['bias_check']['bias_detected']:
-            st.warning(f"⚠️ Potential bias detected: {', '.join(prediction['bias_check']['bias_reasons'])}")
+        # Safe bias check
+        bias_check = prediction.get('bias_check', {'bias_detected': False, 'bias_reasons': []})
+        if bias_check.get('bias_detected', False):
+            reasons = bias_check.get('bias_reasons', [])
+            st.warning(f"⚠️ Potential bias detected: {', '.join(reasons)}")
     
     def display_double_chance_details(self, prediction):
         """Display double chance prediction details"""
@@ -395,12 +577,12 @@ class ProductionFootballPredictor:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("1X (Home Win or Draw)", f"{prediction['1X']:.1%}")
+            st.metric("1X (Home Win or Draw)", f"{prediction.get('1X', 0.5):.1%}")
         with col2:
-            st.metric("X2 (Away Win or Draw)", f"{prediction['X2']:.1%}")
+            st.metric("X2 (Away Win or Draw)", f"{prediction.get('X2', 0.5):.1%}")
         
-        st.success(f"🎯 Recommended: {prediction['recommendation']}")
-        st.metric("Confidence", f"{prediction['confidence']:.1%}")
+        st.success(f"🎯 Recommended: {prediction.get('recommendation', 'Unknown')}")
+        st.metric("Confidence", f"{prediction.get('confidence', 0.5):.1%}")
     
     def display_over_under_details(self, prediction):
         """Display over/under prediction details"""
@@ -408,12 +590,12 @@ class ProductionFootballPredictor:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Over 2.5 Goals", f"{prediction['over_2.5']:.1%}")
+            st.metric("Over 2.5 Goals", f"{prediction.get('over_2.5', 0.5):.1%}")
         with col2:
-            st.metric("Under 2.5 Goals", f"{prediction['under_2.5']:.1%}")
+            st.metric("Under 2.5 Goals", f"{prediction.get('under_2.5', 0.5):.1%}")
         
-        st.metric("Expected Total Goals", f"{prediction['expected_total_goals']:.1f}")
-        st.success(f"🎯 Recommended: {prediction['recommendation']}")
+        st.metric("Expected Total Goals", f"{prediction.get('expected_total_goals', 2.5):.1f}")
+        st.success(f"🎯 Recommended: {prediction.get('recommendation', 'Unknown')}")
     
     def display_both_teams_score_details(self, prediction):
         """Display both teams to score prediction details"""
@@ -421,25 +603,28 @@ class ProductionFootballPredictor:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Yes", f"{prediction['yes']:.1%}")
+            st.metric("Yes", f"{prediction.get('yes', 0.5):.1%}")
         with col2:
-            st.metric("No", f"{prediction['no']:.1%}")
+            st.metric("No", f"{prediction.get('no', 0.5):.1%}")
         
-        st.success(f"🎯 Recommended: {prediction['recommendation']}")
+        st.success(f"🎯 Recommended: {prediction.get('recommendation', 'Unknown')}")
     
     def display_correct_score_details(self, prediction):
         """Display correct score prediction details"""
         st.subheader("🎯 Correct Score Probabilities")
         
-        scores = list(prediction.keys())
-        probabilities = list(prediction.values())
-        
-        fig = go.Figure(data=[go.Bar(x=scores, y=probabilities)])
-        fig.update_layout(title="Most Likely Scores", xaxis_title="Score", yaxis_title="Probability")
-        st.plotly_chart(fig, use_container_width=True)
-        
-        for score, prob in prediction.items():
-            st.write(f"**{score}**: {prob:.2%}")
+        if prediction and len(prediction) > 0:
+            scores = list(prediction.keys())
+            probabilities = list(prediction.values())
+            
+            fig = go.Figure(data=[go.Bar(x=scores, y=probabilities)])
+            fig.update_layout(title="Most Likely Scores", xaxis_title="Score", yaxis_title="Probability")
+            st.plotly_chart(fig, use_container_width=True)
+            
+            for score, prob in prediction.items():
+                st.write(f"**{score}**: {prob:.2%}")
+        else:
+            st.info("No correct score predictions available")
     
     def learning_dashboard_tab(self):
         """Learning and improvement dashboard"""
@@ -453,27 +638,28 @@ class ProductionFootballPredictor:
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                st.metric("Recent Accuracy", f"{metrics['recent_accuracy']:.1%}")
+                st.metric("Recent Accuracy", f"{metrics.get('recent_accuracy', 0.5):.1%}")
             
             with col2:
-                st.metric("Learning Rate", f"{metrics['learning_rate']:.1%}")
+                st.metric("Learning Rate", f"{metrics.get('learning_rate', 0.1):.1%}")
             
             with col3:
-                st.metric("Total Corrections", metrics['total_corrections_applied'])
+                st.metric("Total Corrections", metrics.get('total_corrections_applied', 0))
             
             with col4:
-                if metrics.get('last_retraining'):
-                    last_train = metrics['last_retraining'].strftime('%Y-%m-%d') if hasattr(metrics['last_retraining'], 'strftime') else 'Unknown'
-                    st.metric("Last Retraining", last_train)
+                last_train = metrics.get('last_retraining')
+                if last_train and hasattr(last_train, 'strftime'):
+                    st.metric("Last Retraining", last_train.strftime('%Y-%m-%d'))
                 else:
                     st.metric("Last Retraining", "Never")
             
             # Error distribution chart
             st.subheader("📊 Error Analysis")
-            if metrics['error_distribution']:
+            error_dist = metrics.get('error_distribution', {})
+            if error_dist:
                 error_df = pd.DataFrame({
-                    'Error Type': list(metrics['error_distribution'].keys()),
-                    'Count': list(metrics['error_distribution'].values())
+                    'Error Type': list(error_dist.keys()),
+                    'Count': list(error_dist.values())
                 })
                 
                 fig = px.pie(error_df, values='Count', names='Error Type', 
@@ -698,33 +884,9 @@ class ProductionFootballPredictor:
         st.header("🔍 Database Health Check")
         st.markdown("Verify and initialize database tables to prevent errors")
         
-        try:
-            # Import and run the database health check
-            from database_check import DatabaseHealthCheck
-            checker = DatabaseHealthCheck()
-            checker.run_health_check()
-        except ImportError as e:
-            st.error("Database health check module not found")
-            st.info("Please make sure 'database_check.py' is in the main project folder")
-            
-            # Fallback basic database check
-            st.subheader("🛠️ Basic Database Check")
-            
-            try:
-                # Test database connection
-                conn = self.predictor.db._get_connection()
-                tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-                conn.close()
-                
-                st.success(f"✅ Database connected successfully! Found {len(tables)} tables.")
-                
-                if st.button("Initialize Database", key="init_db_fallback"):
-                    self.predictor.db._init_database()
-                    st.success("Database initialized!")
-                    st.rerun()
-                    
-            except Exception as db_error:
-                st.error(f"❌ Database error: {db_error}")
+        # Use the embedded database health check
+        checker = DatabaseHealthCheck(self.predictor.db)
+        checker.run_health_check()
     
     def system_info_tab(self):
         """System information tab"""
