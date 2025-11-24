@@ -28,7 +28,7 @@ except ImportError as e:
 class DatabaseHealthCheck:
   """Simple database health check embedded in the app"""
     
-    def __init__(self, db_manager):
+  def __init__(self, db_manager):
         self.db = db_manager
     
     def run_health_check(self):
