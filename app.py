@@ -25,8 +25,8 @@ except ImportError as e:
     st.error(f"Import Error: {e}")
     st.info("Please make sure all required files are in the correct directories")
 
-    class DatabaseHealthCheck:
-    """Simple database health check embedded in the app"""
+class DatabaseHealthCheck:
+  """Simple database health check embedded in the app"""
     
     def __init__(self, db_manager):
         self.db = db_manager
