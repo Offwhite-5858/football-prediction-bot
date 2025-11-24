@@ -383,7 +383,7 @@ class ProductionFootballPredictor:
             st.info("💡 **First time?** Make sure to visit the 'Database Health' tab to initialize the database.")
     
 # REPLACE THE ENTIRE METHOD WITH:
-def display_match_outcome_details(self, prediction):
+def display_match_outcome_details(self, prediction, key_suffix=""):
     """Display match outcome prediction details"""
     try:
         st.subheader("🎯 Match Outcome Prediction")
@@ -396,14 +396,14 @@ def display_match_outcome_details(self, prediction):
         draw_prob = probs.get('draw', 0.34) 
         away_prob = probs.get('away', 0.33)
         
-        # Probability visualization
+        # Probability visualization with unique key
         fig = go.Figure(data=[
             go.Bar(name='Probability', 
                   x=['Home Win', 'Draw', 'Away Win'], 
                   y=[home_prob, draw_prob, away_prob])
         ])
         fig.update_layout(title="Prediction Probabilities", yaxis_title="Probability")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"match_outcome_chart_{key_suffix}")
         
         # Prediction details
         col1, col2, col3 = st.columns(3)
@@ -431,6 +431,81 @@ def display_match_outcome_details(self, prediction):
                 
     except Exception as e:
         st.error(f"Error displaying match outcome details: {e}")
+
+def display_prediction_details(self, prediction):
+    """Display detailed prediction analysis"""
+    try:
+        # Generate a unique key based on match details
+        home_team = prediction.get('home_team', 'Unknown')
+        away_team = prediction.get('away_team', 'Unknown')
+        unique_key = f"{home_team}_{away_team}_{hash(str(prediction)) % 10000}"
+        
+        st.subheader("🔍 Detailed Prediction Analysis")
+        
+        # Safe data access
+        league = prediction.get('league', 'Unknown League')
+        quality = prediction.get('data_quality', {'level': 'Unknown'})
+        use_live_data = prediction.get('use_live_data', False)
+        
+        # Match info
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Match:** {home_team} vs {away_team}")
+            st.write(f"**League:** {league}")
+        with col2:
+            st.write(f"**Data Quality:** {quality.get('level', 'Unknown')}")
+            st.write(f"**Live Data Used:** {use_live_data}")
+        
+        # Safe prediction tabs with unique keys
+        predictions_data = prediction.get('predictions', {})
+        pred_tabs = st.tabs(["Match Outcome", "Double Chance", "Over/Under", "Both Teams Score", "Correct Score"])
+        
+        with pred_tabs[0]:
+            match_pred = predictions_data.get('match_outcome', {})
+            self.display_match_outcome_details(match_pred, f"{unique_key}_outcome")
+        
+        with pred_tabs[1]:
+            dc_pred = predictions_data.get('double_chance', {})
+            self.display_double_chance_details(dc_pred, f"{unique_key}_dc")
+        
+        with pred_tabs[2]:
+            ou_pred = predictions_data.get('over_under', {})
+            self.display_over_under_details(ou_pred, f"{unique_key}_ou")
+        
+        with pred_tabs[3]:
+            bts_pred = predictions_data.get('both_teams_score', {})
+            self.display_both_teams_score_details(bts_pred, f"{unique_key}_bts")
+        
+        with pred_tabs[4]:
+            cs_pred = predictions_data.get('correct_score', {})
+            self.display_correct_score_details(cs_pred, f"{unique_key}_cs")
+        
+        # Data quality reasons
+        with st.expander("📈 Data Quality Assessment"):
+            reasons = quality.get('reasons', ['No quality assessment available'])
+            for reason in reasons:
+                st.write(reason)
+                
+    except Exception as e:
+        st.error(f"Error displaying prediction details: {e}")
+
+# Also update the other chart methods to accept key_suffix:
+def display_correct_score_details(self, prediction, key_suffix=""):
+    """Display correct score prediction details"""
+    st.subheader("🎯 Correct Score Probabilities")
+    
+    if prediction and len(prediction) > 0:
+        scores = list(prediction.keys())
+        probabilities = list(prediction.values())
+        
+        fig = go.Figure(data=[go.Bar(x=scores, y=probabilities)])
+        fig.update_layout(title="Most Likely Scores", xaxis_title="Score", yaxis_title="Probability")
+        st.plotly_chart(fig, use_container_width=True, key=f"correct_score_{key_suffix}")
+        
+        for score, prob in prediction.items():
+            st.write(f"**{score}**: {prob:.2%}")
+    else:
+        st.info("No correct score predictions available")
 
 # REPLACE THE ENTIRE METHOD WITH:
 def display_prediction_card(self, fixture, prediction, index):
