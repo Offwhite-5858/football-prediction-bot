@@ -1043,7 +1043,7 @@ class ProductionFootballPredictor:
         
         with col2:
             st.write("**System Capacity:**")
-            st.write("- Predictions/Hour: 120)
+            st.write("- Predictions/Hour: 120")
             st.write("- Concurrent Users: 50+")
             st.write("- Data Freshness: < 5 minutes")
             st.write("- API Rate: 10 requests/minute")
