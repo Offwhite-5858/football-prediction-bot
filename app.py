@@ -980,14 +980,48 @@ class ProductionFootballPredictor:
                 st.success("Health check completed")
                 st.rerun()
     
-    def database_health_tab(self):
-        """Database health check and initialization tab"""
-        st.header("🔍 Database Health Check")
-        st.markdown("Verify and initialize database tables to prevent errors")
-        
+ def database_health_tab(self):
+    """Database health check and initialization tab"""
+    st.header("🔍 Database Health Check")
+    st.markdown("Verify and initialize database tables to prevent errors")
+    
+    try:
         # Use the embedded database health check
         checker = DatabaseHealthCheck(self.predictor.db)
         checker.run_health_check()
+    except Exception as e:
+        st.error(f"❌ Database health check failed: {e}")
+        st.info("💡 Try initializing the database first using the button below")
+        
+        # Fallback basic database check
+        st.subheader("🛠️ Basic Database Check")
+        
+        try:
+            # Test database connection
+            conn = self.predictor.db._get_connection()
+            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            conn.close()
+            
+            if tables:
+                st.success(f"✅ Database connected successfully! Found {len(tables)} tables.")
+                st.write("**Available tables:**")
+                for table in tables:
+                    st.write(f"- {table[0]}")
+            else:
+                st.warning("⚠️ Database connected but no tables found.")
+                
+        except Exception as db_error:
+            st.error(f"❌ Database connection failed: {db_error}")
+        
+        # Simple initialization button
+        st.subheader("🚨 Quick Database Fix")
+        if st.button("🛠️ Initialize Database", type="primary", key="init_db_fallback"):
+            try:
+                self.predictor.db._init_database()
+                st.success("✅ Database initialized successfully!")
+                st.rerun()
+            except Exception as init_error:
+                st.error(f"❌ Database initialization failed: {init_error}")
     
     def system_info_tab(self):
         """System information tab"""
