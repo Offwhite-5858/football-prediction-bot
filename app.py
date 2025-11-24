@@ -133,13 +133,12 @@ class DatabaseHealthCheck:
     
     def _initialize_all_tables(self):
         """Initialize all database tables"""
-        
-# REPLACE WITH:
-try:
-    self.db._init_database()
-    st.success("✅ Database initialized successfully!")
-except Exception as e:
-    st.error(f"❌ Database initialization failed: {e}")
+        try:
+            # Re-initialize the database
+            self.db._init_database()
+            return True
+        except Exception as e:
+            st.error(f"Error initializing tables: {e}")
             return False
     
     def _add_sample_predictions(self):
