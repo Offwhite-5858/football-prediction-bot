@@ -25,6 +25,32 @@ except ImportError as e:
     st.error(f"Import Error: {e}")
     st.info("Please make sure all required files are in the correct directories")
 
+# Add this import at the top
+try:
+    from data.real_historical_data import RealHistoricalData
+except ImportError:
+    print("⚠️ Real historical data module not available")
+
+# Add this method to your ProductionFootballPredictor class
+def initialize_historical_data(self):
+    """Initialize historical data system"""
+    try:
+        historical_data = RealHistoricalData()
+        matches = historical_data.download_real_historical_data()
+        st.success(f"✅ Historical data initialized with {len(matches)} matches")
+        return historical_data
+    except Exception as e:
+        st.error(f"❌ Failed to initialize historical data: {e}")
+        return None
+
+# Add a button in your Database Health tab to initialize historical data
+# In the database_health_tab method, add:
+if st.button("📊 Load Historical Data", key="load_historical"):
+    with st.spinner("Loading historical match data..."):
+        historical_data = self.initialize_historical_data()
+        if historical_data:
+            st.success("✅ Historical data loaded successfully!")
+
 class DatabaseHealthCheck:
     """Simple database health check embedded in the app"""
     
