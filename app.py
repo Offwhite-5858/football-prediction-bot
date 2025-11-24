@@ -458,7 +458,7 @@ class ProductionFootballPredictor:
             for i, prediction in enumerate(reversed(st.session_state.custom_predictions[-5:])):
                 home_team = prediction.get('home_team', 'Unknown')
                 away_team = prediction.get('away_team', 'Unknown')
-                with st.expander(f"#{i+1}: {home_team} vs {away_team}", key=f"history_{i}"):
+                with st.expander(f"#{i+1}: {home_team} vs {away_team}"):
                     self.display_prediction_details(prediction)
     
     def display_prediction_card(self, fixture, prediction, index):
