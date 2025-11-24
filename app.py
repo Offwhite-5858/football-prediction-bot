@@ -54,7 +54,6 @@ class DatabaseHealthCheck:
             st.metric("Database Size", "0 KB")
     except Exception as e:
         st.metric("Database Size", "Unknown")
-
         with col3:
             table_count = self._get_table_count()
             st.metric("Tables Found", table_count)
