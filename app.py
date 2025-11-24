@@ -4,39 +4,25 @@ import numpy as np
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import warnings
 import sys
 import os
 
-# Add current directory to Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add the src and utils directories to Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 
 warnings.filterwarnings('ignore')
 
-# Import config first
-from config import Config
-
-# Initialize directories
-Config.ensure_directories()
-
-# Now import other modules
+# Now import our modules
 try:
-    from src.prediction_orchestrator import PredictionOrchestrator
-    from src.learning_system import ContinuousLearningSystem
-    from src.advanced_analytics import AdvancedAnalytics
-    from src.production_monitor import ProductionMonitor
-    from src.live_monitor import LiveMatchMonitor
-    from src.error_handler import ProductionErrorHandler
-    from utils.ui_enhancements import UIEnhancer
+    from config import Config
+    from prediction_orchestrator import PredictionOrchestrator
+    print("✅ All imports successful!")
 except ImportError as e:
-    st.error(f"Import error: {e}")
-    # Fallback to basic functionality
-    class FallbackPredictor:
-        def predict_match(self, home, away, league):
-            return {"prediction": "SYSTEM_LOADING", "confidence": 0.5}
-    
-    PredictionOrchestrator = FallbackPredictor
-    UIEnhancer = type('UIEnhancer', (), {})
+    st.error(f"Import Error: {e}")
+    st.info("Please make sure all required files are in the correct directories")
 
 class ProductionFootballPredictor:
     def __init__(self):
