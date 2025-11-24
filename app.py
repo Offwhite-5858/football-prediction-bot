@@ -17,7 +17,6 @@ warnings.filterwarnings('ignore')
 
 # Now import our modules
 try:
-    from config import Config
     from prediction_orchestrator import PredictionOrchestrator
     print("✅ All imports successful!")
 except ImportError as e:
@@ -125,12 +124,13 @@ class ProductionFootballPredictor:
         self.display_system_status()
         
         # Main Tabs
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "🎯 Live Predictions", 
             "🔮 Custom Predictions", 
             "🧠 Learning Dashboard",
             "📊 Advanced Analytics",
             "⚙️ Production Monitor",  
+            "🔍 Database Health",
             "🤖 System Info"
         ])
         
@@ -150,6 +150,9 @@ class ProductionFootballPredictor:
             self.production_monitoring_tab()
         
         with tab6:
+            self.database_health_tab()
+        
+        with tab7:
             self.system_info_tab()
     
     def display_system_status(self):
@@ -183,6 +186,10 @@ class ProductionFootballPredictor:
         st.header("🎯 Live Fixture Predictions")
         st.markdown("AI predictions for current and upcoming matches")
         
+        # Quick database check warning
+        if st.session_state.get('predictions_generated', 0) == 0:
+            st.warning("💡 **Tip**: If you encounter database errors, visit the 'Database Health' tab first to initialize the database.")
+        
         # League selection
         league = st.selectbox(
             "Select League:",
@@ -192,8 +199,14 @@ class ProductionFootballPredictor:
         
         if st.button("🔄 Load Live Fixtures", type="primary"):
             with st.spinner("🔄 Loading live fixtures and generating AI predictions..."):
-                predictions = self.predictor.predict_live_fixtures(league)
-                st.session_state.predictions = predictions
+                try:
+                    predictions = self.predictor.predict_live_fixtures(league)
+                    st.session_state.predictions = predictions
+                    st.session_state.predictions_generated = len(predictions)
+                    st.success(f"✅ Generated {len(predictions)} predictions!")
+                except Exception as e:
+                    st.error(f"❌ Prediction failed: {e}")
+                    st.info("💡 Visit the 'Database Health' tab to initialize the database if this is your first time running the app.")
             
         # Display predictions
         if st.session_state.predictions:
@@ -206,6 +219,7 @@ class ProductionFootballPredictor:
                 self.display_prediction_card(fixture, prediction, i)
         else:
             st.info("👆 Click 'Load Live Fixtures' to see AI predictions")
+            st.info("💡 **First time?** Make sure to visit the 'Database Health' tab to initialize the database.")
     
     def custom_predictions_tab(self):
         """Custom match predictions tab"""
@@ -256,6 +270,7 @@ class ProductionFootballPredictor:
                         self.display_prediction_details(prediction)
                     except Exception as e:
                         st.error(f"Prediction failed: {e}")
+                        st.info("💡 If this is a database error, visit the 'Database Health' tab to initialize the database.")
         
         # Show prediction history
         if st.session_state.custom_predictions:
@@ -447,8 +462,11 @@ class ProductionFootballPredictor:
                 st.metric("Total Corrections", metrics['total_corrections_applied'])
             
             with col4:
-                last_train = metrics['last_retraining'].strftime('%Y-%m-%d')
-                st.metric("Last Retraining", last_train)
+                if metrics.get('last_retraining'):
+                    last_train = metrics['last_retraining'].strftime('%Y-%m-%d') if hasattr(metrics['last_retraining'], 'strftime') else 'Unknown'
+                    st.metric("Last Retraining", last_train)
+                else:
+                    st.metric("Last Retraining", "Never")
             
             # Error distribution chart
             st.subheader("📊 Error Analysis")
@@ -619,24 +637,94 @@ class ProductionFootballPredictor:
             st.write("Rate Limit: 8/10 per minute")
             st.write("Error Rate: 2.1%")
         
+        # Quick Database Fix Section
+        st.subheader("🚨 Quick Database Fix")
+        st.warning("If you're getting SQL errors, click below to initialize the database:")
+        
+        if st.button("🛠️ Initialize Database Now", type="primary", key="quick_fix"):
+            try:
+                # Re-initialize database
+                self.predictor.db._init_database()
+                st.success("✅ Database initialized successfully!")
+                
+                # Add some sample data
+                conn = self.predictor.db._get_connection()
+                
+                # Add a sample match and prediction to prevent empty table errors
+                sample_match = ('test_match_001', 'Manchester City', 'Liverpool', 'Premier League', '2024-03-10')
+                conn.execute('''
+                    INSERT OR IGNORE INTO matches 
+                    (match_id, home_team, away_team, league, match_date)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', sample_match)
+                
+                sample_prediction = ('test_match_001', 'match_outcome', '{"prediction": "H"}', 0.75, 'v2.1', '{}', 80)
+                conn.execute('''
+                    INSERT OR IGNORE INTO predictions 
+                    (match_id, prediction_type, prediction_data, confidence, model_version, features_used, data_quality_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', sample_prediction)
+                
+                conn.commit()
+                conn.close()
+                
+                st.success("✅ Sample data added! Try making predictions again.")
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+        
         # Control Panel
         st.subheader("🎛️ Control Panel")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("🔄 Refresh Metrics"):
+            if st.button("🔄 Refresh Metrics", key="refresh_metrics"):
                 st.rerun()
         
         with col2:
-            if st.button("🧹 Clear Old Data"):
+            if st.button("🧹 Clear Old Data", key="clear_data"):
                 st.success("Maintenance completed")
                 st.rerun()
         
         with col3:
-            if st.button("📊 Force Health Check"):
+            if st.button("📊 Force Health Check", key="health_check"):
                 st.success("Health check completed")
                 st.rerun()
+    
+    def database_health_tab(self):
+        """Database health check and initialization tab"""
+        st.header("🔍 Database Health Check")
+        st.markdown("Verify and initialize database tables to prevent errors")
+        
+        try:
+            # Import and run the database health check
+            from database_check import DatabaseHealthCheck
+            checker = DatabaseHealthCheck()
+            checker.run_health_check()
+        except ImportError as e:
+            st.error("Database health check module not found")
+            st.info("Please make sure 'database_check.py' is in the main project folder")
+            
+            # Fallback basic database check
+            st.subheader("🛠️ Basic Database Check")
+            
+            try:
+                # Test database connection
+                conn = self.predictor.db._get_connection()
+                tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+                conn.close()
+                
+                st.success(f"✅ Database connected successfully! Found {len(tables)} tables.")
+                
+                if st.button("Initialize Database", key="init_db_fallback"):
+                    self.predictor.db._init_database()
+                    st.success("Database initialized!")
+                    st.rerun()
+                    
+            except Exception as db_error:
+                st.error(f"❌ Database error: {db_error}")
     
     def system_info_tab(self):
         """System information tab"""
