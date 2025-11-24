@@ -1,4 +1,3 @@
-# utils/cache_manager.py - SMART CACHING SYSTEM
 import json
 import os
 from datetime import datetime, timedelta
@@ -22,6 +21,7 @@ class CacheManager:
         
         with open(cache_file, 'w') as f:
             json.dump(cache_data, f)
+        return True
     
     def get_cached_data(self, key):
         """Get cached data if not expired"""
@@ -36,7 +36,7 @@ class CacheManager:
             
             expires_at = datetime.fromisoformat(cache_data['expires_at'])
             if datetime.now() > expires_at:
-                os.remove(cache_file)  # Remove expired cache
+                os.remove(cache_file)
                 return None
             
             return cache_data['data']
@@ -46,9 +46,19 @@ class CacheManager:
     def cache_team_features(self, team_name, league, features):
         """Cache team features for performance"""
         key = f"features_{team_name}_{league}".replace(" ", "_").lower()
-        self.cache_data(key, features, expiry_hours=12)
+        return self.cache_data(key, features, expiry_hours=12)
     
     def get_cached_team_features(self, team_name, league):
         """Get cached team features"""
         key = f"features_{team_name}_{league}".replace(" ", "_").lower()
+        return self.get_cached_data(key)
+    
+    def cache_fixtures(self, league, fixtures):
+        """Cache fixtures data"""
+        key = f"fixtures_{league}".replace(" ", "_").lower()
+        return self.cache_data(key, fixtures, expiry_hours=2)
+    
+    def get_cached_fixtures(self, league):
+        """Get cached fixtures"""
+        key = f"fixtures_{league}".replace(" ", "_").lower()
         return self.get_cached_data(key)
