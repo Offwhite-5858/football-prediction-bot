@@ -1,9 +1,23 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import warnings
+import sys
+import os
+
+# FIX: Add parent directory to path
+current_dir = os.path.dirname(__file__)
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+from utils.database import DatabaseManager
+from utils.api_client import OptimizedAPIClient
+from src.feature_engineer import AdvancedFeatureEngineer
+from src.model_ensemble import ProductionMLEnsemble
+
 warnings.filterwarnings('ignore')
 
+# Rest of your code remains the same...
 from config import Config
 from utils.database import DatabaseManager
 from utils.api_client import OptimizedAPIClient
