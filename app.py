@@ -980,7 +980,7 @@ class ProductionFootballPredictor:
                 st.success("Health check completed")
                 st.rerun()
     
-   def database_health_tab(self):
+       def database_health_tab(self):
     """Database health check and initialization tab"""
     st.header("🔍 Database Health Check")
     st.markdown("Verify and initialize database tables to prevent errors")
@@ -1022,7 +1022,6 @@ class ProductionFootballPredictor:
                 st.rerun()
             except Exception as init_error:
                 st.error(f"❌ Database initialization failed: {init_error}")
-    
     def system_info_tab(self):
         """System information tab"""
         st.header("⚙️ System Information")
