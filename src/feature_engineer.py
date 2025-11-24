@@ -13,8 +13,6 @@ from utils.database import DatabaseManager
 from config import Config
 
 class AdvancedFeatureEngineer:
-    # ... rest of the class remains the same ...
-class AdvancedFeatureEngineer:
     """Production-grade feature engineering with 100+ features"""
     
     def __init__(self):
