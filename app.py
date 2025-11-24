@@ -133,12 +133,13 @@ class DatabaseHealthCheck:
     
     def _initialize_all_tables(self):
         """Initialize all database tables"""
-        try:
-            # Re-initialize the database
-            self.db._init_database()
-            return True
-        except Exception as e:
-            st.error(f"Error initializing tables: {e}")
+        
+# REPLACE WITH:
+try:
+    self.db._init_database()
+    st.success("✅ Database initialized successfully!")
+except Exception as e:
+    st.error(f"❌ Database initialization failed: {e}")
             return False
     
     def _add_sample_predictions(self):
@@ -381,100 +382,110 @@ class ProductionFootballPredictor:
             st.info("👆 Click 'Load Live Fixtures' to see AI predictions")
             st.info("💡 **First time?** Make sure to visit the 'Database Health' tab to initialize the database.")
     
-    def custom_predictions_tab(self):
-        """Custom match predictions tab"""
-        st.header("🔮 Custom Match Prediction")
-        st.markdown("Analyze **ANY** match with our advanced AI system")
+# REPLACE THE ENTIRE METHOD WITH:
+def display_match_outcome_details(self, prediction):
+    """Display match outcome prediction details"""
+    try:
+        st.subheader("🎯 Match Outcome Prediction")
         
-        with st.form("custom_prediction_form"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                league = st.selectbox(
-                    "Select League:",
-                    ["Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1"],
-                    key="custom_league"
-                )
-                
-                home_team = st.text_input(
-                    "Home Team",
-                    placeholder="e.g., Manchester City",
-                    help="Enter the home team name"
-                )
-            
-            with col2:
-                # Team suggestions based on league
-                suggested_teams = self.get_league_teams(league)
-                away_team = st.selectbox(
-                    "Away Team",
-                    suggested_teams,
-                    index=1 if len(suggested_teams) > 1 else 0,
-                    help="Select from league teams or type custom"
-                )
-                
-                use_live_data = st.checkbox(
-                    "Use Live API Data", 
-                    value=True,
-                    help="Get current form, injuries, and stats (uses API requests)"
-                )
-            
-            submitted = st.form_submit_button("🤖 Generate AI Prediction")
-            
-            if submitted and home_team and away_team:
-                with st.spinner("🔍 Analyzing teams with advanced AI..."):
-                    try:
-                        prediction = self.predictor.predict_custom_match(
-                            home_team, away_team, league, use_live_data
-                        )
-                        st.session_state.custom_predictions.append(prediction)
-                        self.display_prediction_details(prediction)
-                    except Exception as e:
-                        st.error(f"Prediction failed: {e}")
-                        st.info("💡 If this is a database error, visit the 'Database Health' tab to initialize the database.")
+        # Safe probability access
+        probs = prediction.get('probabilities', {'home': 0.33, 'draw': 0.34, 'away': 0.33})
         
-        # Show prediction history
-        if st.session_state.custom_predictions:
-            st.subheader("📋 Custom Prediction History")
-            for i, prediction in enumerate(reversed(st.session_state.custom_predictions[-5:])):
-                with st.expander(f"#{i+1}: {prediction['home_team']} vs {prediction['away_team']}"):
-                    self.display_prediction_details(prediction)
-    
-    def display_prediction_card(self, fixture, prediction, index):
-        """Display prediction in a professional card"""
+        # Create probability data safely
+        home_prob = probs.get('home', 0.33)
+        draw_prob = probs.get('draw', 0.34) 
+        away_prob = probs.get('away', 0.33)
+        
+        # Probability visualization
+        fig = go.Figure(data=[
+            go.Bar(name='Probability', 
+                  x=['Home Win', 'Draw', 'Away Win'], 
+                  y=[home_prob, draw_prob, away_prob])
+        ])
+        fig.update_layout(title="Prediction Probabilities", yaxis_title="Probability")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Prediction details
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Home Win", f"{home_prob:.1%}")
+        with col2:
+            st.metric("Draw", f"{draw_prob:.1%}")
+        with col3:
+            st.metric("Away Win", f"{away_prob:.1%}")
+        
+        final_pred = prediction.get('prediction', 'Unknown')
+        confidence = prediction.get('confidence', 0.5)
+        
+        st.metric("Final Prediction", final_pred)
+        st.metric("Confidence Level", f"{confidence:.1%}")
+        
+        # Safe bias check
+        bias_check = prediction.get('bias_check', {'bias_detected': False, 'bias_reasons': []})
+        if bias_check.get('bias_detected', False):
+            reasons = bias_check.get('bias_reasons', [])
+            if reasons:
+                st.warning(f"⚠️ Potential bias detected: {', '.join(reasons)}")
+            else:
+                st.warning("⚠️ Potential bias detected")
+                
+    except Exception as e:
+        st.error(f"Error displaying match outcome details: {e}")
+
+# REPLACE THE ENTIRE METHOD WITH:
+def display_prediction_card(self, fixture, prediction, index):
+    """Display prediction in a professional card"""
+    try:
         with st.container():
+            # Safe fixture data access
+            home_team = fixture.get('home_team', 'Unknown Team')
+            away_team = fixture.get('away_team', 'Unknown Team') 
+            league = fixture.get('league', 'Unknown League')
+            date = fixture.get('date', 'Unknown Date')
+            time = fixture.get('time', '')
+            
             st.markdown(f"""
-            <div class="prediction-card">
-                <h3 style='color: white; margin: 0;'>{fixture['home_team']} vs {fixture['away_team']}</h3>
-                <p style='color: white; margin: 0;'>{fixture['league']} • {fixture['date']} {fixture['time']}</p>
+            <div style='
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 2rem;
+                border-radius: 15px;
+                margin: 1rem 0;
+            '>
+                <h3 style='color: white; margin: 0;'>{home_team} vs {away_team}</h3>
+                <p style='color: white; margin: 0;'>{league} • {date} {time}</p>
             </div>
             """, unsafe_allow_html=True)
             
-            # Prediction results - with safe key access
+            # Safe prediction data access
+            predictions_data = prediction.get('predictions', {})
+            
+            # Prediction results
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                main_pred = prediction['predictions'].get('match_outcome', {})
+                main_pred = predictions_data.get('match_outcome', {})
                 pred_value = main_pred.get('prediction', 'Unknown')
                 confidence = main_pred.get('confidence', 0.5)
                 st.metric("AI Prediction", pred_value)
                 st.metric("Confidence", f"{confidence:.1%}")
             
             with col2:
-                dc_pred = prediction['predictions'].get('double_chance', {})
+                dc_pred = predictions_data.get('double_chance', {})
                 dc_rec = dc_pred.get('recommendation', 'Unknown')
                 dc_conf = dc_pred.get('confidence', 0.5)
                 st.metric("Double Chance", dc_rec)
                 st.metric("Probability", f"{dc_conf:.1%}")
             
             with col3:
-                ou_pred = prediction['predictions'].get('over_under', {})
+                ou_pred = predictions_data.get('over_under', {})
                 ou_rec = ou_pred.get('recommendation', 'Unknown')
                 goals = ou_pred.get('expected_total_goals', 2.5)
                 st.metric("Over/Under", ou_rec)
                 st.metric("Expected Goals", f"{goals:.1f}")
             
             with col4:
-                bts_pred = prediction['predictions'].get('both_teams_score', {})
+                bts_pred = predictions_data.get('both_teams_score', {})
                 bts_rec = bts_pred.get('recommendation', 'Unknown')
                 bts_prob = bts_pred.get('yes', 0.5)
                 st.metric("Both Teams Score", bts_rec)
@@ -484,71 +495,102 @@ class ProductionFootballPredictor:
             quality = prediction.get('data_quality', {'level': 'Unknown', 'score': 0})
             quality_level = quality.get('level', 'Unknown')
             quality_score = quality.get('score', 0)
-            quality_class = f"quality-{quality_level.lower()}" if quality_level != 'Unknown' else "quality-moderate"
+            
+            # Determine quality class safely
+            if quality_level.lower() == 'excellent':
+                quality_class = "quality-excellent"
+            elif quality_level.lower() == 'good':
+                quality_class = "quality-good" 
+            elif quality_level.lower() == 'moderate':
+                quality_class = "quality-moderate"
+            else:
+                quality_class = "quality-limited"
+                
             st.markdown(f"**Data Quality:** <span class='{quality_class}'>{quality_level} ({quality_score}/100)</span>", unsafe_allow_html=True)
             
             if st.button(f"📊 View Detailed Analysis", key=f"details_{index}"):
                 self.display_prediction_details(prediction)
             
             st.markdown("---")
+            
+    except Exception as e:
+        st.error(f"Error displaying prediction card: {e}")
+        st.info("Prediction data format may be incorrect")
     
-    def display_prediction_details(self, prediction):
-        """Display detailed prediction analysis"""
+# REPLACE THE ENTIRE METHOD WITH:
+def display_prediction_details(self, prediction):
+    """Display detailed prediction analysis"""
+    try:
         st.subheader("🔍 Detailed Prediction Analysis")
         
-          # Match info
+        # Safe data access
+        home_team = prediction.get('home_team', 'Unknown Team')
+        away_team = prediction.get('away_team', 'Unknown Team')
+        league = prediction.get('league', 'Unknown League')
+        quality = prediction.get('data_quality', {'level': 'Unknown'})
+        use_live_data = prediction.get('use_live_data', False)
+        
+        # Match info
         col1, col2 = st.columns(2)
         with col1:
-            st.write(f"**Match:** {prediction['home_team']} vs {prediction['away_team']}")
-            st.write(f"**League:** {prediction['league']}")
+            st.write(f"**Match:** {home_team} vs {away_team}")
+            st.write(f"**League:** {league}")
         with col2:
-            quality = prediction.get('data_quality', {'level': 'Unknown'})
             st.write(f"**Data Quality:** {quality.get('level', 'Unknown')}")
-            st.write(f"**Live Data Used:** {prediction.get('use_live_data', False)}")
+            st.write(f"**Live Data Used:** {use_live_data}")
         
-        # Prediction tabs with safe key access
+        # Safe prediction tabs
+        predictions_data = prediction.get('predictions', {})
         pred_tabs = st.tabs(["Match Outcome", "Double Chance", "Over/Under", "Both Teams Score", "Correct Score"])
         
         with pred_tabs[0]:
-            match_pred = prediction['predictions'].get('match_outcome', {})
+            match_pred = predictions_data.get('match_outcome', {})
             self.display_match_outcome_details(match_pred)
         
         with pred_tabs[1]:
-            dc_pred = prediction['predictions'].get('double_chance', {})
+            dc_pred = predictions_data.get('double_chance', {})
             self.display_double_chance_details(dc_pred)
         
         with pred_tabs[2]:
-            ou_pred = prediction['predictions'].get('over_under', {})
+            ou_pred = predictions_data.get('over_under', {})
             self.display_over_under_details(ou_pred)
         
         with pred_tabs[3]:
-            bts_pred = prediction['predictions'].get('both_teams_score', {})
+            bts_pred = predictions_data.get('both_teams_score', {})
             self.display_both_teams_score_details(bts_pred)
         
         with pred_tabs[4]:
-            cs_pred = prediction['predictions'].get('correct_score', {})
+            cs_pred = predictions_data.get('correct_score', {})
             self.display_correct_score_details(cs_pred)
         
         # Data quality reasons
         with st.expander("📈 Data Quality Assessment"):
-            reasons = prediction.get('data_quality', {}).get('reasons', ['No quality assessment available'])
+            reasons = quality.get('reasons', ['No quality assessment available'])
             for reason in reasons:
                 st.write(reason)
+                
+    except Exception as e:
+        st.error(f"Error displaying prediction details: {e}")
     
-    def display_match_outcome_details(self, prediction):
-        """Display match outcome prediction details"""
+# REPLACE THE ENTIRE METHOD WITH:
+def display_match_outcome_details(self, prediction):
+    """Display match outcome prediction details"""
+    try:
         st.subheader("🎯 Match Outcome Prediction")
         
         # Safe probability access
         probs = prediction.get('probabilities', {'home': 0.33, 'draw': 0.34, 'away': 0.33})
         
+        # Create probability data safely
+        home_prob = probs.get('home', 0.33)
+        draw_prob = probs.get('draw', 0.34) 
+        away_prob = probs.get('away', 0.33)
+        
         # Probability visualization
         fig = go.Figure(data=[
             go.Bar(name='Probability', 
                   x=['Home Win', 'Draw', 'Away Win'], 
-                  y=[probs.get('home', 0.33), 
-                     probs.get('draw', 0.34), 
-                     probs.get('away', 0.33)])
+                  y=[home_prob, draw_prob, away_prob])
         ])
         fig.update_layout(title="Prediction Probabilities", yaxis_title="Probability")
         st.plotly_chart(fig, use_container_width=True)
@@ -556,21 +598,29 @@ class ProductionFootballPredictor:
         # Prediction details
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Home Win", f"{probs.get('home', 0.33):.1%}")
+            st.metric("Home Win", f"{home_prob:.1%}")
         with col2:
-            st.metric("Draw", f"{probs.get('draw', 0.34):.1%}")
+            st.metric("Draw", f"{draw_prob:.1%}")
         with col3:
-            st.metric("Away Win", f"{probs.get('away', 0.33):.1%}")
+            st.metric("Away Win", f"{away_prob:.1%}")
         
-        st.metric("Final Prediction", prediction.get('prediction', 'Unknown'))
-        st.metric("Confidence Level", f"{prediction.get('confidence', 0.5):.1%}")
+        final_pred = prediction.get('prediction', 'Unknown')
+        confidence = prediction.get('confidence', 0.5)
+        
+        st.metric("Final Prediction", final_pred)
+        st.metric("Confidence Level", f"{confidence:.1%}")
         
         # Safe bias check
         bias_check = prediction.get('bias_check', {'bias_detected': False, 'bias_reasons': []})
         if bias_check.get('bias_detected', False):
             reasons = bias_check.get('bias_reasons', [])
-            st.warning(f"⚠️ Potential bias detected: {', '.join(reasons)}")
-    
+            if reasons:
+                st.warning(f"⚠️ Potential bias detected: {', '.join(reasons)}")
+            else:
+                st.warning("⚠️ Potential bias detected")
+                
+    except Exception as e:
+        st.error(f"Error displaying match outcome details: {e}")
     def display_double_chance_details(self, prediction):
         """Display double chance prediction details"""
         st.subheader("🛡️ Double Chance Prediction")
