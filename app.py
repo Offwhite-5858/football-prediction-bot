@@ -25,152 +25,7 @@ except ImportError as e:
     st.error(f"Import Error: {e}")
     st.info("Please make sure all required files are in the correct directories")
 
-class DatabaseHealthCheck:
-    """Simple database health check embedded in the app"""
-    
-    def __init__(self, db_manager):
-        self.db = db_manager
-    
-    def run_health_check(self):
-        """Run comprehensive database health check"""
-        st.title("🔍 Database Health Check")
-        st.markdown("Verify database tables and initialize if needed")
-        
-        # Database Status
-        st.subheader("📊 Database Status")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            db_exists = os.path.exists("database/predictions.db")
-            st.metric("Database File", "✅ Found" if db_exists else "❌ Missing")
-        
-        with col2:
-        try:
-        if db_exists:
-            db_size = os.path.getsize("database/predictions.db")
-            st.metric("Database Size", f"{db_size / 1024:.1f} KB")
-        else:
-            st.metric("Database Size", "0 KB")
-    except Exception as e:
-        st.metric("Database Size", "Unknown")
-        
-        with col3:
-            table_count = self._get_table_count()
-            st.metric("Tables Found", table_count)
-        
-        # Table Verification
-        st.subheader("📋 Table Verification")
-        
-        required_tables = [
-            'matches', 'predictions', 'prediction_errors'
-        ]
-        
-        table_status = []
-        for table in required_tables:
-            exists = self._check_table_exists(table)
-            count = self._get_table_row_count(table) if exists else 0
-            table_status.append({
-                'table': table,
-                'exists': exists,
-                'row_count': count,
-                'status': '✅' if exists else '❌'
-            })
-        
-        # Display table status
-        status_df = pd.DataFrame(table_status)
-        st.dataframe(status_df, use_container_width=True)
-        
-        # Initialize Database Section
-        st.subheader("🛠️ Database Initialization")
-        
-        if st.button("🔄 Initialize All Tables", type="primary"):
-            with st.spinner("Initializing database tables..."):
-                success = self._initialize_all_tables()
-                if success:
-                    st.success("✅ All tables initialized successfully!")
-                    st.rerun()
-                else:
-                    st.error("❌ Failed to initialize tables")
-        
-        # Add Sample Data Section
-        st.subheader("📝 Sample Data")
-        
-        if st.button("➕ Add Sample Predictions"):
-            self._add_sample_predictions()
-            st.success("✅ Sample predictions added!")
-            st.rerun()
-    
-    def _get_table_count(self):
-        """Get number of tables in database"""
-        try:
-            conn = self.db._get_connection()
-            result = conn.execute("""
-                SELECT COUNT(*) FROM sqlite_master 
-                WHERE type='table' AND name NOT LIKE 'sqlite_%'
-            """).fetchone()
-            conn.close()
-            return result[0] if result else 0
-        except:
-            return 0
-    
-    def _check_table_exists(self, table_name):
-        """Check if a table exists"""
-        try:
-            conn = self.db._get_connection()
-            result = conn.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name=?
-            """, (table_name,)).fetchone()
-            conn.close()
-            return result is not None
-        except:
-            return False
-    
-    def _get_table_row_count(self, table_name):
-        """Get row count for a table"""
-        try:
-            conn = self.db._get_connection()
-            result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
-            conn.close()
-            return result[0] if result else 0
-        except:
-            return 0
-    
-    def _initialize_all_tables(self):
-        """Initialize all database tables"""
-        try:
-            # Re-initialize the database
-            self.db._init_database()
-            return True
-        except Exception as e:
-            st.error(f"Error initializing tables: {e}")
-            return False
-    
-    def _add_sample_predictions(self):
-        """Add sample prediction data for testing"""
-        conn = self.db._get_connection()
-        
-        try:
-            # Add sample matches
-            sample_matches = [
-                ('match_001', 'Manchester City', 'Liverpool', 'Premier League', '2024-03-10', 'H'),
-                ('match_002', 'Arsenal', 'Chelsea', 'Premier League', '2024-03-09', 'D'),
-                ('match_003', 'Real Madrid', 'Barcelona', 'La Liga', '2024-03-08', 'A')
-            ]
-            
-            for match in sample_matches:
-                conn.execute('''
-                    INSERT OR IGNORE INTO matches 
-                    (match_id, home_team, away_team, league, match_date, result)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', match)
-            
-            # Add sample predictions
-            sample_predictions = [
-                ('match_001', 'match_outcome', '{"prediction": "H", "confidence": 0.75}', 0.75, 'v2.1', '{}', 85),
-                ('match_002', 'match_outcome', '{"prediction": "D", "confidence": 0.65}', 0.65, 'v2.1', '{}', 80),
-class DatabaseHealthCheck:
+    class DatabaseHealthCheck:
     """Simple database health check embedded in the app"""
     
     def __init__(self, db_manager):
@@ -332,7 +187,8 @@ class DatabaseHealthCheck:
             st.error(f"Error adding sample data: {e}")
             conn.rollback()
         finally:
-            conn.close()
+            conn.close()                            
+                    # 
 
 class ProductionFootballPredictor:
     def __init__(self):
