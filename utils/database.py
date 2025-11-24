@@ -176,18 +176,17 @@ class DatabaseManager:
             )
         ''')
         
-        
-        # Prediction learning metadata
-conn.execute('''
-    CREATE TABLE IF NOT EXISTS prediction_learning_metadata (
-        prediction_id TEXT PRIMARY KEY,
-        features_count INTEGER,
-        data_quality_score REAL,
-        model_version TEXT,
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (prediction_id) REFERENCES predictions (match_id)
-    )
-''')
+        # Prediction learning metadata - FIXED INDENTATION
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS prediction_learning_metadata (
+                prediction_id TEXT PRIMARY KEY,
+                features_count INTEGER,
+                data_quality_score REAL,
+                model_version TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (prediction_id) REFERENCES predictions (match_id)
+            )
+        ''')
         
         # Create indexes for performance
         conn.execute('CREATE INDEX IF NOT EXISTS idx_matches_team ON matches(home_team, away_team)')
@@ -522,7 +521,7 @@ conn.execute('''
         conn = self._get_connection()
         
         try:
-            # Recent accuracy
+              # Recent accuracy
             accuracy_query = '''
                 SELECT COUNT(*) as total, 
                        SUM(CASE WHEN error_value < 0.3 THEN 1 ELSE 0 END) as correct
