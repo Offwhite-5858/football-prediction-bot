@@ -4,39 +4,15 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-# Import from same level first
-try:
-    from .feature_engineer import AdvancedFeatureEngineer
-    from .model_ensemble import ProductionMLEnsemble
-    from .learning_system import ContinuousLearningSystem
-    from .live_monitor import LiveMatchMonitor
-except ImportError:
-    # Fallback for direct execution
-    from feature_engineer import AdvancedFeatureEngineer
-    from model_ensemble import ProductionMLEnsemble
-    from learning_system import ContinuousLearningSystem
-    from live_monitor import LiveMatchMonitor
+# FIXED IMPORTS
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Then import from utils
-try:
-    from ..utils.database import DatabaseManager
-    from ..utils.api_client import OptimizedAPIClient
-except ImportError:
-    # Fallback
-    import sys
-    import os
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    from utils.database import DatabaseManager
-    from utils.api_client import OptimizedAPIClient
-
-# Rest of your code remains the same...
-from config import Config
 from utils.database import DatabaseManager
 from utils.api_client import OptimizedAPIClient
 from src.feature_engineer import AdvancedFeatureEngineer
 from src.model_ensemble import ProductionMLEnsemble
-from src.learning_system import ContinuousLearningSystem
-from src.live_monitor import LiveMatchMonitor
 
 class PredictionOrchestrator:
     """Production-grade prediction orchestrator with learning capabilities"""
