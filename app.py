@@ -46,9 +46,15 @@ class DatabaseHealthCheck:
             st.metric("Database File", "✅ Found" if db_exists else "❌ Missing")
         
         with col2:
-            db_size = os.path.getsize("database/predictions.db") if db_exists else 0
+    try:
+        if db_exists:
+            db_size = os.path.getsize("database/predictions.db")
             st.metric("Database Size", f"{db_size / 1024:.1f} KB")
-        
+        else:
+            st.metric("Database Size", "0 KB")
+    except Exception as e:
+        st.metric("Database Size", "Unknown")
+
         with col3:
             table_count = self._get_table_count()
             st.metric("Tables Found", table_count)
