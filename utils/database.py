@@ -8,6 +8,8 @@ class DatabaseManager:
     """Production-grade SQLite database management with learning capabilities"""
     
     def __init__(self, db_path="database/predictions.db"):
+        # Create database directory if it doesn't exist
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
         self._init_database()
     
@@ -42,10 +44,10 @@ class DatabaseManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 match_id TEXT,
                 prediction_type TEXT NOT NULL,
-                prediction_data JSON,
+                prediction_data TEXT,  -- Changed from JSON to TEXT for compatibility
                 confidence REAL CHECK(confidence >= 0 AND confidence <= 1),
                 model_version TEXT,
-                features_used JSON,
+                features_used TEXT,    -- Changed from JSON to TEXT
                 data_quality_score INTEGER CHECK(data_quality_score >= 0 AND data_quality_score <= 100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (match_id) REFERENCES matches (match_id),
@@ -63,10 +65,9 @@ class DatabaseManager:
                 error_value REAL CHECK(error_value >= 0 AND error_value <= 1),
                 actual_result TEXT CHECK(actual_result IN ('H', 'D', 'A')),
                 error_type TEXT,
-                features_analysis JSON,
-                model_breakdown JSON,
-                analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (prediction_id) REFERENCES predictions (match_id)
+                features_analysis TEXT,  -- Changed from JSON to TEXT
+                model_breakdown TEXT,    -- Changed from JSON to TEXT
+                analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -78,9 +79,8 @@ class DatabaseManager:
                 error_value REAL,
                 error_type TEXT,
                 correction_applied TEXT,
-                correction_details JSON,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (prediction_id) REFERENCES predictions (match_id)
+                correction_details TEXT,  -- Changed from JSON to TEXT
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -107,7 +107,7 @@ class DatabaseManager:
                 team_name TEXT NOT NULL,
                 league TEXT NOT NULL,
                 feature_type TEXT NOT NULL,
-                feature_data JSON,
+                feature_data TEXT,  -- Changed from JSON to TEXT
                 last_updated TIMESTAMP,
                 expiry_time TIMESTAMP,
                 PRIMARY KEY (team_name, league, feature_type)
@@ -171,32 +171,38 @@ class DatabaseManager:
                 prediction_id TEXT,
                 user_rating INTEGER CHECK(user_rating >= 1 AND user_rating <= 5),
                 feedback_text TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (prediction_id) REFERENCES predictions (match_id)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # Prediction learning metadata - FIXED INDENTATION
+        # Prediction learning metadata
         conn.execute('''
             CREATE TABLE IF NOT EXISTS prediction_learning_metadata (
                 prediction_id TEXT PRIMARY KEY,
                 features_count INTEGER,
                 data_quality_score REAL,
                 model_version TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (prediction_id) REFERENCES predictions (match_id)
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
         # Create indexes for performance
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_matches_team ON matches(home_team, away_team)')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_matches_league ON matches(league)')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(match_date)')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_match ON predictions(match_id)')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_errors_prediction ON prediction_errors(prediction_id)')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_errors_date ON prediction_errors(analyzed_at)')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_features_team ON feature_cache(team_name, league)')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_api_requests_time ON api_requests(timestamp)')
+        indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_matches_team ON matches(home_team, away_team)',
+            'CREATE INDEX IF NOT EXISTS idx_matches_league ON matches(league)',
+            'CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(match_date)',
+            'CREATE INDEX IF NOT EXISTS idx_predictions_match ON predictions(match_id)',
+            'CREATE INDEX IF NOT EXISTS idx_errors_prediction ON prediction_errors(prediction_id)',
+            'CREATE INDEX IF NOT EXISTS idx_errors_date ON prediction_errors(analyzed_at)',
+            'CREATE INDEX IF NOT EXISTS idx_features_team ON feature_cache(team_name, league)',
+            'CREATE INDEX IF NOT EXISTS idx_api_requests_time ON api_requests(timestamp)'
+        ]
+        
+        for index_sql in indexes:
+            try:
+                conn.execute(index_sql)
+            except Exception as e:
+                print(f"⚠️ Could not create index: {e}")
         
         conn.commit()
         conn.close()
@@ -205,7 +211,10 @@ class DatabaseManager:
     def _get_connection(self):
         """Get database connection with error handling"""
         try:
-            return sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path)
+            # Enable foreign keys
+            conn.execute("PRAGMA foreign_keys = ON")
+            return conn
         except Exception as e:
             print(f"❌ Database connection failed: {e}")
             raise
@@ -249,6 +258,7 @@ class DatabaseManager:
                 ))
             
             conn.commit()
+            print(f"✅ Stored prediction for {match_data['match_id']}")
             return True
             
         except Exception as e:
@@ -521,7 +531,7 @@ class DatabaseManager:
         conn = self._get_connection()
         
         try:
-              # Recent accuracy
+            # Recent accuracy
             accuracy_query = '''
                 SELECT COUNT(*) as total, 
                        SUM(CASE WHEN error_value < 0.3 THEN 1 ELSE 0 END) as correct
@@ -530,7 +540,7 @@ class DatabaseManager:
             '''
             
             accuracy_result = conn.execute(accuracy_query, (f'-{days} days',)).fetchone()
-            recent_accuracy = accuracy_result[1] / accuracy_result[0] if accuracy_result[0] > 0 else 0.5
+            recent_accuracy = accuracy_result[1] / accuracy_result[0] if accuracy_result and accuracy_result[0] > 0 else 0.5
             
             # Error distribution
             error_query = '''
