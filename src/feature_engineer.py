@@ -2,8 +2,20 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import warnings
+import sys
+import os
+
+# FIX: Add parent directory to path
+current_dir = os.path.dirname(__file__)
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+from config import Config
+from utils.database import DatabaseManager
+
 warnings.filterwarnings('ignore')
 
+# Rest of your code remains the same...
 from config import Config
 from utils.database import DatabaseManager
 
