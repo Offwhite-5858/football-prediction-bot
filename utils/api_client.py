@@ -7,25 +7,24 @@ warnings.filterwarnings('ignore')
 
 from config import Config
 from utils.database import DatabaseManager
+from utils.cache_manager import CacheManager
 
 class OptimizedAPIClient:
-    """High-frequency API client (10 requests/minute)"""
+    """High-frequency API client with smart caching"""
     
     def __init__(self):
         self.base_url = "https://api.football-data.org/v4"
         self.headers = {'X-Auth-Token': Config.FOOTBALL_DATA_API}
         self.db = DatabaseManager()
+        self.cache = CacheManager()
         self.request_times = []
         
     def _rate_limit(self):
         """Enforce 10 requests per minute limit"""
         current_time = time.time()
-        
-        # Remove requests older than 1 minute
         self.request_times = [t for t in self.request_times if current_time - t < 60]
         
         if len(self.request_times) >= Config.REQUESTS_PER_MINUTE:
-            # Wait until we can make another request
             wait_time = 60 - (current_time - self.request_times[0])
             if wait_time > 0:
                 time.sleep(wait_time)
@@ -54,30 +53,15 @@ class OptimizedAPIClient:
             self.db.log_api_request(endpoint, params, 0)
             return None
     
-    def get_team_data(self, team_name, league):
-        """Get comprehensive team data"""
-        # First try to find team ID
-        teams_data = self.make_request('teams', {'limit': 100})
-        
-        if teams_data:
-            for team in teams_data.get('teams', []):
-                if team['name'].lower() == team_name.lower():
-                    team_id = team['id']
-                    
-                    # Get detailed team data
-                    team_details = self.make_request(f'teams/{team_id}')
-                    team_matches = self.make_request(f'teams/{team_id}/matches', {'limit': 10})
-                    
-                    return {
-                        'team_info': team_details,
-                        'recent_matches': team_matches,
-                        'cached_at': datetime.now().isoformat()
-                    }
-        
-        return None
-    
     def get_live_fixtures(self, league=None):
-        """Get live and upcoming fixtures"""
+        """Get live and upcoming fixtures with caching"""
+        # Try cache first
+        if league:
+            cached_fixtures = self.cache.get_cached_fixtures(league)
+            if cached_fixtures:
+                print(f"✅ Using cached fixtures for {league}")
+                return cached_fixtures
+        
         params = {
             'status': 'LIVE,SCHEDULED',
             'dateFrom': datetime.now().strftime('%Y-%m-%d'),
@@ -109,23 +93,67 @@ class OptimizedAPIClient:
                     'matchday': match.get('matchday', 1)
                 }
                 
-                # Add score if available
                 if match['status'] == 'FINISHED':
                     fixture['home_goals'] = match['score']['fullTime']['home']
                     fixture['away_goals'] = match['score']['fullTime']['away']
                 
                 fixtures.append(fixture)
             
+            # Cache the results
+            if league and fixtures:
+                self.cache.cache_fixtures(league, fixtures)
+            
             return fixtures
         
+        # Fallback to historical data
         return self._get_fallback_fixtures(league)
     
     def _get_fallback_fixtures(self, league):
         """Generate fallback fixtures when API fails"""
+        from data.initial_historical_data import RealHistoricalData
+        historical_data = RealHistoricalData()
+        
+        try:
+            # Get recent matches from database as fallback fixtures
+            conn = self.db._get_connection()
+            query = '''
+                SELECT DISTINCT home_team, away_team, league, match_date as date
+                FROM matches 
+                WHERE league = ? 
+                AND match_date > date('now', '-30 days')
+                ORDER BY match_date DESC 
+                LIMIT 10
+            '''
+            
+            results = conn.execute(query, (league,)).fetchall()
+            conn.close()
+            
+            fixtures = []
+            for row in results:
+                fixtures.append({
+                    'id': f'fallback_{row[0]}_{row[1]}',
+                    'home_team': row[0],
+                    'away_team': row[1],
+                    'league': row[2],
+                    'date': row[3],
+                    'time': '15:00',
+                    'status': 'SCHEDULED',
+                    'matchday': 1,
+                    'data_source': 'historical_fallback'
+                })
+            
+            return fixtures if fixtures else self._create_basic_fixtures(league)
+            
+        except Exception as e:
+            print(f"Fallback fixtures failed: {e}")
+            return self._create_basic_fixtures(league)
+    
+    def _create_basic_fixtures(self, league):
+        """Create basic fixtures as last resort"""
         teams = {
             'Premier League': ['Manchester City', 'Arsenal', 'Liverpool', 'Chelsea', 'Manchester United'],
             'La Liga': ['Real Madrid', 'Barcelona', 'Atletico Madrid', 'Sevilla', 'Valencia'],
-            'Bundesliga': ['Bayern Munich', 'Borussia Dortmund', 'RB Leipzig', 'Bayer Leverkusen', 'Eintracht Frankfurt'],
+            'Bundesliga': ['Bayern Munich', 'Borussia Dortmund', 'RB Leipzig', 'Bayer Leverkusen'],
             'Serie A': ['Inter Milan', 'AC Milan', 'Juventus', 'Napoli', 'Roma'],
             'Ligue 1': ['PSG', 'Monaco', 'Lyon', 'Marseille', 'Lille']
         }
@@ -135,14 +163,16 @@ class OptimizedAPIClient:
         
         for i in range(min(5, len(league_teams))):
             fixtures.append({
-                'id': f'fallback_{i}',
+                'id': f'basic_{i}',
                 'home_team': league_teams[i],
                 'away_team': league_teams[(i + 1) % len(league_teams)],
                 'league': league,
                 'date': (datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d'),
                 'time': '15:00',
                 'status': 'SCHEDULED',
-                'matchday': 1
+                'matchday': 1,
+                'data_source': 'basic_fallback'
             })
         
         return fixtures
+                    
