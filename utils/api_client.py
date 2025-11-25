@@ -5,10 +5,24 @@ from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
-from config import Config
-from utils.database import DatabaseManager
-from utils.cache_manager import CacheManager
+import sys
+import os
 
+# Fix import paths
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+try:
+    from config import Config
+    from utils.database import DatabaseManager
+    from utils.cache_manager import CacheManager
+    print("✅ All imports successful in api_client")
+except ImportError as e:
+    print(f"❌ Import error in api_client: {e}")
+    import sqlite3
+    
 class OptimizedAPIClient:
     """High-frequency API client with smart caching"""
     
