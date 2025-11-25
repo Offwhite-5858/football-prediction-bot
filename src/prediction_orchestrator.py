@@ -6,14 +6,26 @@ warnings.filterwarnings('ignore')
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.database import DatabaseManager
-from utils.api_client import OptimizedAPIClient
-from utils.cache_manager import CacheManager
-from src.feature_engineer import AdvancedFeatureEngineer
-from src.model_ensemble import ProductionMLEnsemble
-from config import Config
+# Fix import paths
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+try:
+    from utils.database import DatabaseManager
+    from utils.api_client import OptimizedAPIClient
+    from utils.cache_manager import CacheManager
+    from src.feature_engineer import AdvancedFeatureEngineer
+    from src.model_ensemble import ProductionMLEnsemble
+    from config import Config
+    print("✅ All imports successful in prediction_orchestrator")
+except ImportError as e:
+    print(f"❌ Import error in prediction_orchestrator: {e}")
+    # Fallback imports
+    import sqlite3
+    import json
 
 class ContinuousLearningSystem:
     """Advanced continuous learning system that improves from mistakes"""
