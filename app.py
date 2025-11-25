@@ -17,7 +17,68 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 
 warnings.filterwarnings('ignore')
 
-# Import our production modules
+# AUTO-INITIALIZATION SYSTEM
+def check_and_initialize_system():
+    """Check if system needs initialization and run it"""
+    
+    # Check if database exists and has tables
+    db_path = "database/predictions.db"
+    if not os.path.exists(db_path):
+        st.warning("🔄 First-time setup detected. Initializing system...")
+        try:
+            # Import and run initialization
+            from run_first import initialize_system
+            if initialize_system():
+                st.success("✅ System initialized successfully!")
+                st.rerun()
+            else:
+                st.error("❌ System initialization failed")
+        except Exception as e:
+            st.error(f"❌ Initialization error: {e}")
+            return False
+    
+    # Check if database has required tables
+    try:
+        conn = sqlite3.connect(db_path)
+        tables = conn.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+        """).fetchall()
+        conn.close()
+        
+        required_tables = ['matches', 'predictions', 'team_stats']
+        existing_tables = [table[0] for table in tables]
+        
+        missing_tables = [table for table in required_tables if table not in existing_tables]
+        
+        if missing_tables:
+            st.warning(f"🔄 Database missing tables: {missing_tables}. Running setup...")
+            try:
+                from run_first import initialize_system
+                if initialize_system():
+                    st.success("✅ Database setup completed!")
+                    st.rerun()
+                else:
+                    st.error("❌ Database setup failed")
+            except Exception as e:
+                st.error(f"❌ Setup error: {e}")
+                return False
+                
+    except Exception as e:
+        st.error(f"❌ Database check failed: {e}")
+        return False
+    
+    return True
+
+# Run initialization check
+if 'initialized' not in st.session_state:
+    if check_and_initialize_system():
+        st.session_state.initialized = True
+    else:
+        st.error("🚨 System initialization failed. Please check the logs.")
+        st.stop()
+
+# Now import your production modules
 try:
     from prediction_orchestrator import PredictionOrchestrator
     from monitoring import PerformanceMonitor
@@ -25,6 +86,7 @@ try:
 except ImportError as e:
     st.error(f"❌ Import Error: {e}")
     st.info("Please make sure all required files are in the correct directories")
+    st.stop()
 
 class ProductionFootballPredictor:
     def __init__(self):
