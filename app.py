@@ -11,82 +11,43 @@ import os
 import sqlite3
 import json
 
-# Add the src and utils directories to Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
-
 warnings.filterwarnings('ignore')
 
-# AUTO-INITIALIZATION SYSTEM
-def check_and_initialize_system():
-    """Check if system needs initialization and run it"""
-    
-    # Check if database exists and has tables
-    db_path = "database/predictions.db"
-    if not os.path.exists(db_path):
-        st.warning("🔄 First-time setup detected. Initializing system...")
-        try:
-            # Import and run initialization
-            from run_first import initialize_system
-            if initialize_system():
-                st.success("✅ System initialized successfully!")
-                st.rerun()
-            else:
-                st.error("❌ System initialization failed")
-        except Exception as e:
-            st.error(f"❌ Initialization error: {e}")
-            return False
-    
-    # Check if database has required tables
-    try:
-        conn = sqlite3.connect(db_path)
-        tables = conn.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name NOT LIKE 'sqlite_%'
-        """).fetchall()
-        conn.close()
-        
-        required_tables = ['matches', 'predictions', 'team_stats']
-        existing_tables = [table[0] for table in tables]
-        
-        missing_tables = [table for table in required_tables if table not in existing_tables]
-        
-        if missing_tables:
-            st.warning(f"🔄 Database missing tables: {missing_tables}. Running setup...")
-            try:
-                from run_first import initialize_system
-                if initialize_system():
-                    st.success("✅ Database setup completed!")
-                    st.rerun()
-                else:
-                    st.error("❌ Database setup failed")
-            except Exception as e:
-                st.error(f"❌ Setup error: {e}")
-                return False
-                
-    except Exception as e:
-        st.error(f"❌ Database check failed: {e}")
-        return False
-    
-    return True
+# Fix import paths - use absolute imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
 
-# Run initialization check
-if 'initialized' not in st.session_state:
-    if check_and_initialize_system():
-        st.session_state.initialized = True
-    else:
-        st.error("🚨 System initialization failed. Please check the logs.")
-        st.stop()
-
-# Now import your production modules
 try:
-    from prediction_orchestrator import PredictionOrchestrator
-    from monitoring import PerformanceMonitor
+    # Try direct imports first
+    from src.prediction_orchestrator import PredictionOrchestrator
+    from src.monitoring import PerformanceMonitor
     print("✅ All production imports successful!")
 except ImportError as e:
     st.error(f"❌ Import Error: {e}")
-    st.info("Please make sure all required files are in the correct directories")
-    st.stop()
+    st.info("Trying alternative import methods...")
+    
+    # Alternative import method
+    try:
+        # Add src and utils to path
+        src_path = os.path.join(current_dir, 'src')
+        utils_path = os.path.join(current_dir, 'utils')
+        
+        if src_path not in sys.path:
+            sys.path.append(src_path)
+        if utils_path not in sys.path:
+            sys.path.append(utils_path)
+            
+        from prediction_orchestrator import PredictionOrchestrator
+        from monitoring import PerformanceMonitor
+        print("✅ Alternative imports successful!")
+    except ImportError as e2:
+        st.error(f"❌ All import attempts failed: {e2}")
+        st.info("""
+        💡 **Quick Fix Instructions:**
+        1. Make sure all files are in the correct directories
+        2. Run: `python run_first.py` to initialize the system
+        3. Check the 'Database Health' tab to initialize tables
+        """)
 
 class ProductionFootballPredictor:
     def __init__(self):
