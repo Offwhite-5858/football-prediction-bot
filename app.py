@@ -17,15 +17,6 @@ warnings.filterwarnings('ignore')
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
-try:
-    # Try direct imports first
-    from src.prediction_orchestrator import PredictionOrchestrator
-    from src.monitoring import PerformanceMonitor
-    print("✅ All production imports successful!")
-except ImportError as e:
-    st.error(f"❌ Import Error: {e}")
-    st.info("Trying alternative import methods...")
-    
     # Alternative import method
     try:
         # Add src and utils to path
