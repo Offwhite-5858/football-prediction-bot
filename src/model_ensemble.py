@@ -1,4 +1,5 @@
 import numpy as np
+import numpy as np
 import pandas as pd
 import joblib
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
@@ -11,10 +12,20 @@ warnings.filterwarnings('ignore')
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.database import DatabaseManager
-from config import Config
+# Fix import paths
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+try:
+    from utils.database import DatabaseManager
+    from config import Config
+    print("✅ All imports successful in model_ensemble")
+except ImportError as e:
+    print(f"❌ Import error in model_ensemble: {e}")
+    import sqlite3
 
 class ProductionMLEnsemble:
     """Production-grade ML ensemble with real training and learning"""
