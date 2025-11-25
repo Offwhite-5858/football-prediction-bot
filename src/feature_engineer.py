@@ -6,11 +6,21 @@ warnings.filterwarnings('ignore')
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.database import DatabaseManager
-from utils.cache_manager import CacheManager
-from config import Config
+# Fix import paths
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+try:
+    from utils.database import DatabaseManager
+    from utils.cache_manager import CacheManager
+    from config import Config
+    print("✅ All imports successful in feature_engineer")
+except ImportError as e:
+    print(f"❌ Import error in feature_engineer: {e}")
+    import sqlite3
 
 class AdvancedFeatureEngineer:
     """Production-grade feature engineering with 100+ real features"""
