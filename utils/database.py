@@ -230,6 +230,80 @@ class DatabaseManager:
             return pd.DataFrame()
         finally:
             conn.close()
+    
+    def store_prediction_error(self, prediction_id, error_value, actual_result):
+        """Store prediction error for learning"""
+        conn = self._get_connection()
+        
+        try:
+            conn.execute('''
+                INSERT INTO prediction_errors 
+                (prediction_id, error_value, actual_result)
+                VALUES (?, ?, ?)
+            ''', (prediction_id, error_value, actual_result))
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error storing prediction error: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def store_model_performance(self, model_name, accuracy, precision, recall, f1_score, features_used_count, training_samples):
+        """Store model performance metrics"""
+        conn = self._get_connection()
+        
+        try:
+            conn.execute('''
+                INSERT INTO model_performance 
+                (model_name, accuracy, precision, recall, f1_score)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (model_name, accuracy, precision, recall, f1_score))
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error storing model performance: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def get_prediction_by_match_id(self, match_id):
+        """Get prediction by match ID"""
+        conn = self._get_connection()
+        
+        try:
+            query = '''
+                SELECT * FROM predictions 
+                WHERE match_id = ? 
+                AND prediction_type = 'match_outcome'
+                ORDER BY created_at DESC 
+                LIMIT 1
+            '''
+            
+            result = conn.execute(query, (match_id,)).fetchone()
+            if result:
+                return {
+                    'id': result[0],
+                    'match_id': result[1],
+                    'prediction_type': result[2],
+                    'prediction_data': json.loads(result[3]),
+                    'confidence': result[4],
+                    'model_version': result[5],
+                    'features_used': json.loads(result[6]) if result[6] else {},
+                    'data_quality_score': result[7],
+                    'created_at': result[8]
+                }
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error getting prediction: {e}")
+            return None
+        finally:
+            conn.close()
 
 # Singleton instance
 db_manager = DatabaseManager()
