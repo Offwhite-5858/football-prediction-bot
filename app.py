@@ -108,9 +108,12 @@ class SystemInitializer:
         }
         
         for file_path, content in init_files.items():
-            with open(file_path, 'w') as f:
-                f.write(content)
-            self.initialization_status[file_path] = "✅ Created"
+            try:
+                with open(file_path, 'w') as f:
+                    f.write(content)
+                self.initialization_status[file_path] = "✅ Created"
+            except Exception as e:
+                self.initialization_status[file_path] = f"❌ Error: {e}"
     
     def _initialize_database(self):
         """Initialize database with all tables"""
@@ -120,25 +123,28 @@ class SystemInitializer:
             self.initialization_status['database'] = "✅ Initialized with production schema"
         except Exception as e:
             # Fallback database setup
-            conn = sqlite3.connect('database/predictions.db')
-            # Create basic tables
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS matches (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    match_id TEXT UNIQUE,
-                    home_team TEXT,
-                    away_team TEXT,
-                    league TEXT,
-                    match_date DATE,
-                    home_goals INTEGER,
-                    away_goals INTEGER,
-                    result TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            conn.commit()
-            conn.close()
-            self.initialization_status['database'] = "✅ Fallback database created"
+            try:
+                conn = sqlite3.connect('database/predictions.db')
+                # Create basic tables
+                conn.execute('''
+                    CREATE TABLE IF NOT EXISTS matches (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        match_id TEXT UNIQUE,
+                        home_team TEXT,
+                        away_team TEXT,
+                        league TEXT,
+                        match_date DATE,
+                        home_goals INTEGER,
+                        away_goals INTEGER,
+                        result TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                conn.commit()
+                conn.close()
+                self.initialization_status['database'] = "✅ Fallback database created"
+            except Exception as db_error:
+                self.initialization_status['database'] = f"❌ Database failed: {db_error}"
     
     def _load_historical_data(self):
         """Load historical match data"""
@@ -148,7 +154,7 @@ class SystemInitializer:
             matches = historical_data.download_real_historical_data()
             self.initialization_status['historical_data'] = f"✅ {len(matches)} matches loaded"
         except Exception as e:
-            self.initialization_status['historical_data'] = f"⚠️ Using fallback data: {e}"
+            self.initialization_status['historical_data'] = f"⚠️ Using fallback data: {str(e)[:100]}"
     
     def _initialize_ml_system(self):
         """Initialize ML prediction system"""
@@ -160,7 +166,7 @@ class SystemInitializer:
             else:
                 self.initialization_status['ml_system'] = "✅ Models initialized (will train on use)"
         except Exception as e:
-            self.initialization_status['ml_system'] = f"⚠️ Rule-based fallback: {e}"
+            self.initialization_status['ml_system'] = f"⚠️ Rule-based fallback: {str(e)[:100]}"
 
 class SimplePredictor:
     """Production predictor with ML and fallback support"""
@@ -179,8 +185,10 @@ class SimplePredictor:
             self.ml_predictor = PredictionOrchestrator()
             self.ml_system_available = True
             self.initialized = True
+            print("✅ ML Prediction system initialized")
         except Exception as e:
             # Fallback to simple system
+            print(f"⚠️ ML system not available, using rule-based: {e}")
             self.ml_system_available = False
             self.initialized = True
     
@@ -189,14 +197,17 @@ class SimplePredictor:
         try:
             if self.ml_system_available and self.ml_predictor:
                 # Use full ML system
+                print(f"🤖 Using ML system for {home_team} vs {away_team}")
                 prediction = self.ml_predictor.predict_custom_match(
                     home_team, away_team, league, use_live_data
                 )
                 return prediction['predictions']
             else:
                 # Use enhanced rule-based system
+                print(f"📊 Using rule-based system for {home_team} vs {away_team}")
                 return self._enhanced_rule_based_prediction(home_team, away_team, league)
         except Exception as e:
+            print(f"❌ Prediction error: {e}")
             return self._fallback_prediction()
     
     def _enhanced_rule_based_prediction(self, home_team, away_team, league):
@@ -386,11 +397,15 @@ class FootballPredictorApp:
             
             if success:
                 st.session_state.initialized = True
-                self.predictor = SimplePredictor()
-                st.session_state.system_status = 'Ready'
-                
-                st.success("🎉 System Initialized Successfully!")
-                st.balloons()
+                # Initialize predictor
+                try:
+                    self.predictor = SimplePredictor()
+                    st.session_state.system_status = 'Ready'
+                    st.success("🎉 System Initialized Successfully!")
+                    st.balloons()
+                except Exception as e:
+                    st.error(f"❌ Predictor initialization failed: {e}")
+                    st.session_state.system_status = 'Error'
                 
                 # Show initialization status
                 st.subheader("📊 Initialization Report")
@@ -399,6 +414,14 @@ class FootballPredictorApp:
     
     def run_main_app(self):
         """Run the main prediction application"""
+        # Make sure predictor is initialized
+        if not hasattr(self, 'predictor') or self.predictor is None:
+            try:
+                self.predictor = SimplePredictor()
+            except Exception as e:
+                st.error(f"❌ Failed to initialize predictor: {e}")
+                return
+        
         # Header
         st.markdown("""
         <div class="main-header">
@@ -440,7 +463,7 @@ class FootballPredictorApp:
         """Live predictions tab"""
         st.header("🎯 Live Fixture Predictions")
         
-        # Sample fixtures
+           # Sample fixtures
         sample_fixtures = [
             {'home_team': 'Manchester City', 'away_team': 'Liverpool', 'league': 'Premier League', 'date': '2024-03-10'},
             {'home_team': 'Real Madrid', 'away_team': 'Barcelona', 'league': 'La Liga', 'date': '2024-03-09'},
@@ -453,15 +476,19 @@ class FootballPredictorApp:
             with st.spinner("🤖 Generating AI predictions..."):
                 predictions = []
                 for fixture in sample_fixtures:
-                    prediction = self.predictor.generate_prediction(
-                        fixture['home_team'],
-                        fixture['away_team'], 
-                        fixture['league']
-                    )
-                    predictions.append({
-                        'fixture': fixture,
-                        'prediction': prediction
-                    })
+                    try:
+                        prediction = self.predictor.generate_prediction(
+                            fixture['home_team'],
+                            fixture['away_team'], 
+                            fixture['league']
+                        )
+                        predictions.append({
+                            'fixture': fixture,
+                            'prediction': prediction
+                        })
+                    except Exception as e:
+                        st.error(f"❌ Error predicting {fixture['home_team']} vs {fixture['away_team']}: {e}")
+                        continue
                 
                 st.session_state.predictions = predictions
                 st.success(f"✅ Generated {len(predictions)} AI predictions!")
@@ -492,18 +519,21 @@ class FootballPredictorApp:
             if st.form_submit_button("🤖 Generate Prediction", type="primary"):
                 if home_team and away_team:
                     with st.spinner("🔍 Analyzing match with AI..."):
-                        prediction = self.predictor.generate_prediction(home_team, away_team, league, use_live_data)
-                        
-                        st.session_state.custom_predictions.append({
-                            'home_team': home_team,
-                            'away_team': away_team,
-                            'league': league,
-                            'prediction': prediction,
-                            'timestamp': datetime.now()
-                        })
-                        
-                        self.display_prediction_details(prediction)
-                        st.success("✅ AI prediction generated!")
+                        try:
+                            prediction = self.predictor.generate_prediction(home_team, away_team, league, use_live_data)
+                            
+                            st.session_state.custom_predictions.append({
+                                'home_team': home_team,
+                                'away_team': away_team,
+                                'league': league,
+                                'prediction': prediction,
+                                'timestamp': datetime.now()
+                            })
+                            
+                            self.display_prediction_details(prediction)
+                            st.success("✅ AI prediction generated!")
+                        except Exception as e:
+                            st.error(f"❌ Error generating prediction: {e}")
     
     def analytics_tab(self):
         """Analytics and performance tab"""
@@ -518,32 +548,41 @@ class FootballPredictorApp:
                 st.metric("Total Predictions", total_predictions)
                 
                 # Calculate average confidence
-                avg_confidence = np.mean([
-                    pred['prediction']['match_outcome']['confidence'] 
-                    for pred in st.session_state.predictions
-                ])
-                st.metric("Average Confidence", f"{avg_confidence:.1%}")
+                try:
+                    avg_confidence = np.mean([
+                        pred['prediction']['match_outcome']['confidence'] 
+                        for pred in st.session_state.predictions
+                    ])
+                    st.metric("Average Confidence", f"{avg_confidence:.1%}")
+                except:
+                    st.metric("Average Confidence", "N/A")
             else:
                 st.info("No predictions generated yet")
         
         with col2:
             st.subheader("Market Distribution")
             if st.session_state.predictions:
-                predictions = [pred['prediction']['match_outcome']['prediction'] for pred in st.session_state.predictions]
-                pred_counts = pd.Series(predictions).value_counts()
-                
-                fig = px.pie(
-                    values=pred_counts.values,
-                    names=pred_counts.index,
-                    title="Prediction Distribution"
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                try:
+                    predictions = [pred['prediction']['match_outcome']['prediction'] for pred in st.session_state.predictions]
+                    pred_counts = pd.Series(predictions).value_counts()
+                    
+                    fig = px.pie(
+                        values=pred_counts.values,
+                        names=pred_counts.index,
+                        title="Prediction Distribution"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error creating chart: {e}")
         
         # Prediction history
         st.subheader("📈 Prediction History")
         if st.session_state.custom_predictions:
-            history_df = pd.DataFrame(st.session_state.custom_predictions)
-            st.dataframe(history_df[['home_team', 'away_team', 'league', 'timestamp']], use_container_width=True)
+            try:
+                history_df = pd.DataFrame(st.session_state.custom_predictions)
+                st.dataframe(history_df[['home_team', 'away_team', 'league', 'timestamp']], use_container_width=True)
+            except Exception as e:
+                st.error(f"Error displaying history: {e}")
     
     def system_info_tab(self):
         """System information tab"""
@@ -591,7 +630,7 @@ class FootballPredictorApp:
         
         # System status
         st.subheader("🔍 System Status")
-        if self.initializer.initialization_status:
+        if hasattr(self, 'initializer') and self.initializer.initialization_status:
             for component, status in self.initializer.initialization_status.items():
                 st.write(f"- **{component}**: {status}")
     
@@ -606,75 +645,81 @@ class FootballPredictorApp:
             """, unsafe_allow_html=True)
             
             # Main prediction
-            main_pred = prediction['match_outcome']
-            dc_pred = prediction['double_chance']
-            ou_pred = prediction['over_under']
-            bts_pred = prediction['both_teams_score']
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("AI Prediction", main_pred['prediction'])
-                st.metric("Confidence", f"{main_pred['confidence']:.1%}")
-            
-            with col2:
-                st.metric("Double Chance", dc_pred['recommendation'])
-                st.metric("Probability", f"{dc_pred['confidence']:.1%}")
-            
-            with col3:
-                st.metric("Over/Under", ou_pred['recommendation'])
-                st.metric("Expected Goals", f"{ou_pred['expected_total_goals']:.1f}")
-            
-            with col4:
-                st.metric("Both Teams Score", bts_pred['recommendation'])
-                st.metric("Probability", f"{bts_pred['confidence']:.1%}")
-            
-            # Correct scores
-            st.subheader("🎯 Most Likely Scores")
-            score_cols = st.columns(5)
-            for i, (score, prob) in enumerate(prediction['correct_score'].items()):
-                with score_cols[i]:
-                    st.metric(score, f"{prob:.1%}")
-            
-            st.markdown("---")
+            try:
+                main_pred = prediction['match_outcome']
+                dc_pred = prediction['double_chance']
+                ou_pred = prediction['over_under']
+                bts_pred = prediction['both_teams_score']
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("AI Prediction", main_pred['prediction'])
+                    st.metric("Confidence", f"{main_pred['confidence']:.1%}")
+                
+                with col2:
+                    st.metric("Double Chance", dc_pred['recommendation'])
+                    st.metric("Probability", f"{dc_pred['confidence']:.1%}")
+                
+                with col3:
+                    st.metric("Over/Under", ou_pred['recommendation'])
+                    st.metric("Expected Goals", f"{ou_pred['expected_total_goals']:.1f}")
+                
+                with col4:
+                    st.metric("Both Teams Score", bts_pred['recommendation'])
+                    st.metric("Probability", f"{bts_pred['confidence']:.1%}")
+                
+                # Correct scores
+                st.subheader("🎯 Most Likely Scores")
+                score_cols = st.columns(5)
+                for i, (score, prob) in enumerate(prediction['correct_score'].items()):
+                    with score_cols[i]:
+                        st.metric(score, f"{prob:.1%}")
+                
+                st.markdown("---")
+            except Exception as e:
+                st.error(f"❌ Error displaying prediction card: {e}")
     
     def display_prediction_details(self, prediction):
         """Display detailed prediction analysis"""
         st.subheader("🔍 Detailed Analysis")
         
-        # Match outcome probabilities
-        main_pred = prediction['match_outcome']
-        probs = main_pred['probabilities']
-        
-        fig = go.Figure(data=[
-            go.Bar(x=['Home', 'Draw', 'Away'], 
-                  y=[probs['home'], probs['draw'], probs['away']],
-                  marker_color=['#1f77b4', '#ff7f0e', '#2ca02c'])
-        ])
-        fig.update_layout(
-            title="Match Outcome Probabilities",
-            yaxis_tickformat='.0%',
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Additional markets
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📈 Additional Markets")
-            st.metric("Final Prediction", main_pred['prediction'])
-            st.metric("Confidence Level", f"{main_pred['confidence']:.1%}")
+        try:
+            # Match outcome probabilities
+            main_pred = prediction['match_outcome']
+            probs = main_pred['probabilities']
             
-            # Double chance details
-            dc_pred = prediction['double_chance']
-            st.metric("Safe Bet", dc_pred['recommendation'])
-            st.metric("Safe Bet Confidence", f"{dc_pred['confidence']:.1%}")
-        
-        with col2:
-            st.subheader("🎯 Correct Scores")
-            for score, prob in prediction['correct_score'].items():
-                st.write(f"**{score}**: {prob:.2%}")
+            fig = go.Figure(data=[
+                go.Bar(x=['Home', 'Draw', 'Away'], 
+                      y=[probs['home'], probs['draw'], probs['away']],
+                      marker_color=['#1f77b4', '#ff7f0e', '#2ca02c'])
+            ])
+            fig.update_layout(
+                title="Match Outcome Probabilities",
+                yaxis_tickformat='.0%',
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Additional markets
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📈 Additional Markets")
+                st.metric("Final Prediction", main_pred['prediction'])
+                st.metric("Confidence Level", f"{main_pred['confidence']:.1%}")
+                
+                # Double chance details
+                dc_pred = prediction['double_chance']
+                st.metric("Safe Bet", dc_pred['recommendation'])
+                st.metric("Safe Bet Confidence", f"{dc_pred['confidence']:.1%}")
+            
+            with col2:
+                st.subheader("🎯 Correct Scores")
+                for score, prob in prediction['correct_score'].items():
+                    st.write(f"**{score}**: {prob:.2%}")
+        except Exception as e:
+            st.error(f"❌ Error displaying prediction details: {e}")
 
 # Main execution
 def main():
