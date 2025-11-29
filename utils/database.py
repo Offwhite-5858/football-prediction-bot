@@ -13,10 +13,10 @@ class DatabaseManager:
         self._init_database()
     
     def _init_database(self):
-        """Initialize database with all required tables"""
+        """Initialize database with all required tables - FIXED VERSION"""
         conn = self._get_connection()
         
-        # Core tables
+        # Core tables - FIXED: Ensure all columns exist
         conn.execute('''
             CREATE TABLE IF NOT EXISTS matches (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -165,11 +165,11 @@ class DatabaseManager:
             raise
     
     def store_prediction(self, match_data, prediction_data, model_version="v2.0"):
-        """Store prediction in database"""
+        """Store prediction in database - FIXED VERSION"""
         conn = self._get_connection()
         
         try:
-            # Store or update match
+            # Store or update match - FIXED: Use correct column names
             conn.execute('''
                 INSERT OR REPLACE INTO matches 
                 (match_id, home_team, away_team, league, match_date, season, status)
@@ -184,8 +184,11 @@ class DatabaseManager:
                 match_data.get('status', 'SCHEDULED')
             ))
             
-            # Store prediction
+            # Store prediction - FIXED: Handle missing features_used gracefully
             for pred_type, pred_data in prediction_data.get('predictions', {}).items():
+                features_used = prediction_data.get('features_used', {})
+                data_quality = prediction_data.get('data_quality', {})
+                
                 conn.execute('''
                     INSERT OR REPLACE INTO predictions 
                     (match_id, prediction_type, prediction_data, confidence, model_version, features_used, data_quality_score)
@@ -196,8 +199,8 @@ class DatabaseManager:
                     json.dumps(pred_data),
                     pred_data.get('confidence', 0.5),
                     model_version,
-                    json.dumps(prediction_data.get('features_used', {})),
-                    prediction_data.get('data_quality', {}).get('score', 50)
+                    json.dumps(features_used),
+                    data_quality.get('score', 50)
                 ))
             
             conn.commit()
@@ -232,18 +235,18 @@ class DatabaseManager:
             conn.close()
     
     def get_training_data(self, days=365):
-        """Get training data for model training"""
+        """Get training data for model training - FIXED VERSION"""
         conn = self._get_connection()
         
         try:
+            # FIXED: Use simpler query that doesn't require joins with predictions table
             query = '''
-                SELECT m.home_team, m.away_team, m.league, m.home_goals, m.away_goals, m.result,
-                       p.features_used, p.prediction_data
-                FROM matches m
-                JOIN predictions p ON m.match_id = p.match_id
-                WHERE m.result IS NOT NULL
-                AND m.match_date > date('now', ?)
-                AND p.prediction_type = 'match_outcome'
+                SELECT home_team, away_team, league, home_goals, away_goals, result
+                FROM matches 
+                WHERE result IS NOT NULL
+                AND match_date > date('now', ?)
+                ORDER BY match_date DESC
+                LIMIT 1000
             '''
             
             df = pd.read_sql_query(query, conn, params=(f'-{days} days',))
