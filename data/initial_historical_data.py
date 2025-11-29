@@ -5,6 +5,7 @@ import os
 import requests
 import sys
 import warnings
+import io
 warnings.filterwarnings('ignore')
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
@@ -51,7 +52,8 @@ class RealHistoricalData:
                 response = requests.get(url, headers=headers, timeout=30)
                 response.raise_for_status()
                 
-                df = pd.read_csv(pd.compat.StringIO(response.text))
+                # FIXED: Use io.StringIO instead of pandas.compat.StringIO
+                df = pd.read_csv(io.StringIO(response.text))
                 
                 if len(df) > 0:
                     processed_matches = self._process_football_data_csv(df, league)
@@ -77,9 +79,9 @@ class RealHistoricalData:
                 all_matches.extend(fallback_matches)
         
         # Store in database
-        if all_matches:
-            self._store_matches_in_database(all_matches)
-            print(f"🎉 Historical data loaded: {len(all_matches)} total matches from {successful_leagues} leagues")
+        if all_matches and self.db:
+            stored_count = self._store_matches_in_database(all_matches)
+            print(f"🎉 Historical data loaded: {stored_count} matches stored from {successful_leagues} leagues")
             
             # Update team statistics
             self._update_team_statistics()
@@ -169,16 +171,6 @@ class RealHistoricalData:
                 {'date': '2024-05-11', 'home_team': 'Fulham', 'away_team': 'Manchester City', 'home_goals': 0, 'away_goals': 4, 'result': 'A'},
                 {'date': '2024-05-11', 'home_team': 'Tottenham', 'away_team': 'Burnley', 'home_goals': 2, 'away_goals': 1, 'result': 'H'},
                 {'date': '2024-05-06', 'home_team': 'Crystal Palace', 'away_team': 'Manchester United', 'home_goals': 4, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-05-05', 'home_team': 'Liverpool', 'away_team': 'Tottenham', 'home_goals': 4, 'away_goals': 2, 'result': 'H'},
-                {'date': '2024-05-04', 'home_team': 'Chelsea', 'away_team': 'West Ham', 'home_goals': 2, 'away_goals': 2, 'result': 'D'},
-                {'date': '2024-05-04', 'home_team': 'Arsenal', 'away_team': 'Bournemouth', 'home_goals': 3, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-04-28', 'home_team': 'West Ham', 'away_team': 'Liverpool', 'home_goals': 2, 'away_goals': 2, 'result': 'D'},
-                {'date': '2024-04-27', 'home_team': 'Manchester United', 'away_team': 'Burnley', 'home_goals': 1, 'away_goals': 1, 'result': 'D'},
-                {'date': '2024-04-25', 'home_team': 'Brighton', 'away_team': 'Manchester City', 'home_goals': 0, 'away_goals': 4, 'result': 'A'},
-                {'date': '2024-04-23', 'home_team': 'Arsenal', 'away_team': 'Chelsea', 'home_goals': 5, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-04-21', 'home_team': 'Everton', 'away_team': 'Nottingham Forest', 'home_goals': 2, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-04-20', 'home_team': 'Aston Villa', 'away_team': 'Bournemouth', 'home_goals': 3, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-04-17', 'home_team': 'Tottenham', 'away_team': 'Manchester City', 'home_goals': 1, 'away_goals': 0, 'result': 'H'},
             ],
             'La Liga': [
                 {'date': '2024-05-25', 'home_team': 'Real Madrid', 'away_team': 'Betis', 'home_goals': 0, 'away_goals': 0, 'result': 'D'},
@@ -186,11 +178,6 @@ class RealHistoricalData:
                 {'date': '2024-05-19', 'home_team': 'Atletico Madrid', 'away_team': 'Osasuna', 'home_goals': 2, 'away_goals': 1, 'result': 'H'},
                 {'date': '2024-05-15', 'home_team': 'Real Madrid', 'away_team': 'Alaves', 'home_goals': 5, 'away_goals': 0, 'result': 'H'},
                 {'date': '2024-05-14', 'home_team': 'Barcelona', 'away_team': 'Real Sociedad', 'home_goals': 2, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-05-12', 'home_team': 'Sevilla', 'away_team': 'Cadiz', 'home_goals': 1, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-05-12', 'home_team': 'Valencia', 'away_team': 'Girona', 'home_goals': 1, 'away_goals': 2, 'result': 'A'},
-                {'date': '2024-05-05', 'home_team': 'Atletico Madrid', 'away_team': 'Mallorca', 'home_goals': 1, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-05-04', 'home_team': 'Girona', 'away_team': 'Barcelona', 'home_goals': 4, 'away_goals': 2, 'result': 'H'},
-                {'date': '2024-04-27', 'home_team': 'Real Madrid', 'away_team': 'Real Sociedad', 'home_goals': 1, 'away_goals': 0, 'result': 'H'},
             ],
             'Bundesliga': [
                 {'date': '2024-05-18', 'home_team': 'Bayer Leverkusen', 'away_team': 'Augsburg', 'home_goals': 2, 'away_goals': 1, 'result': 'H'},
@@ -198,11 +185,6 @@ class RealHistoricalData:
                 {'date': '2024-05-12', 'home_team': 'Borussia Dortmund', 'away_team': 'Darmstadt', 'home_goals': 4, 'away_goals': 0, 'result': 'H'},
                 {'date': '2024-05-11', 'home_team': 'RB Leipzig', 'away_team': 'Werder Bremen', 'home_goals': 2, 'away_goals': 1, 'result': 'H'},
                 {'date': '2024-05-05', 'home_team': 'Stuttgart', 'away_team': 'Bayern Munich', 'home_goals': 3, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-05-04', 'home_team': 'Eintracht Frankfurt', 'away_team': 'Bayer Leverkusen', 'home_goals': 1, 'away_goals': 1, 'result': 'D'},
-                {'date': '2024-04-27', 'home_team': 'Borussia Dortmund', 'away_team': 'RB Leipzig', 'home_goals': 4, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-04-21', 'home_team': 'Bayer Leverkusen', 'away_team': 'Borussia Dortmund', 'home_goals': 2, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-04-20', 'home_team': 'Bayern Munich', 'away_team': 'Union Berlin', 'home_goals': 5, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-04-14', 'home_team': 'Stuttgart', 'away_team': 'Eintracht Frankfurt', 'home_goals': 3, 'away_goals': 0, 'result': 'H'},
             ],
             'Serie A': [
                 {'date': '2024-05-26', 'home_team': 'Inter Milan', 'away_team': 'Verona', 'home_goals': 2, 'away_goals': 2, 'result': 'D'},
@@ -210,11 +192,6 @@ class RealHistoricalData:
                 {'date': '2024-05-20', 'home_team': 'Juventus', 'away_team': 'Monza', 'home_goals': 2, 'away_goals': 0, 'result': 'H'},
                 {'date': '2024-05-19', 'home_team': 'Napoli', 'away_team': 'Fiorentina', 'home_goals': 1, 'away_goals': 1, 'result': 'D'},
                 {'date': '2024-05-13', 'home_team': 'Roma', 'away_team': 'Genoa', 'home_goals': 1, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-05-06', 'home_team': 'Inter Milan', 'away_team': 'Lazio', 'home_goals': 2, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-05-05', 'home_team': 'AC Milan', 'away_team': 'Genoa', 'home_goals': 3, 'away_goals': 3, 'result': 'D'},
-                {'date': '2024-04-28', 'home_team': 'Juventus', 'away_team': 'AC Milan', 'home_goals': 0, 'away_goals': 0, 'result': 'D'},
-                {'date': '2024-04-22', 'home_team': 'Inter Milan', 'away_team': 'AC Milan', 'home_goals': 2, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-04-18', 'home_team': 'Roma', 'away_team': 'Bologna', 'home_goals': 1, 'away_goals': 3, 'result': 'A'},
             ],
             'Ligue 1': [
                 {'date': '2024-05-25', 'home_team': 'PSG', 'away_team': 'Lyon', 'home_goals': 2, 'away_goals': 1, 'result': 'H'},
@@ -222,11 +199,6 @@ class RealHistoricalData:
                 {'date': '2024-05-19', 'home_team': 'Marseille', 'away_team': 'Lorient', 'home_goals': 3, 'away_goals': 1, 'result': 'H'},
                 {'date': '2024-05-19', 'home_team': 'Lille', 'away_team': 'Nice', 'home_goals': 2, 'away_goals': 2, 'result': 'D'},
                 {'date': '2024-05-13', 'home_team': 'Lens', 'away_team': 'Montpellier', 'home_goals': 2, 'away_goals': 0, 'result': 'H'},
-                {'date': '2024-05-05', 'home_team': 'PSG', 'away_team': 'Toulouse', 'home_goals': 3, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-05-04', 'home_team': 'Monaco', 'away_team': 'Clermont', 'home_goals': 4, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-04-28', 'home_team': 'Lyon', 'away_team': 'Monaco', 'home_goals': 3, 'away_goals': 2, 'result': 'H'},
-                {'date': '2024-04-24', 'home_team': 'Lille', 'away_team': 'Marseille', 'home_goals': 3, 'away_goals': 1, 'result': 'H'},
-                {'date': '2024-04-21', 'home_team': 'PSG', 'away_team': 'Lyon', 'home_goals': 4, 'away_goals': 1, 'result': 'H'},
             ]
         }
         
@@ -266,8 +238,7 @@ class RealHistoricalData:
     def _store_matches_in_database(self, matches):
         """Store matches in SQLite database with proper error handling"""
         if not self.db:
-            print("❌ Database not available, skipping storage")
-            return
+            return 0
             
         print("💾 Storing matches in database...")
         
@@ -276,27 +247,26 @@ class RealHistoricalData:
         
         for match in matches:
             try:
-                # Use the fixed storage method from DatabaseManager
                 success = self.db.store_historical_match(match)
                 if success:
                     stored_count += 1
                 else:
                     error_count += 1
-                    print(f"⚠️ Failed to store match: {match.get('home_team', '')} vs {match.get('away_team', '')}")
                 
             except Exception as e:
-                print(f"❌ Error storing match {match.get('home_team', '')} vs {match.get('away_team', '')}: {e}")
+                print(f"⚠️ Error storing match {match.get('home_team', '')} vs {match.get('away_team', '')}: {e}")
                 error_count += 1
                 continue
         
-        print(f"✅ {stored_count} matches stored in database successfully")
+        print(f"✅ {stored_count} matches stored in database")
         if error_count > 0:
             print(f"⚠️ {error_count} matches had storage issues")
+        
+        return stored_count
     
     def _update_team_statistics(self):
         """Update team statistics after loading historical data"""
         if not self.db:
-            print("❌ Database not available, skipping team statistics update")
             return
             
         print("📊 Updating team statistics...")
