@@ -13,10 +13,10 @@ class DatabaseManager:
         self._init_database()
     
     def _init_database(self):
-        """Initialize database with all required tables - FIXED VERSION"""
+        """Initialize database with ALL required tables and columns"""
         conn = self._get_connection()
         
-        # Core tables - FIXED: Ensure all columns exist
+        # Core tables - COMPLETE SCHEMA
         conn.execute('''
             CREATE TABLE IF NOT EXISTS matches (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +28,7 @@ class DatabaseManager:
                 home_goals INTEGER,
                 away_goals INTEGER,
                 result TEXT CHECK(result IN ('H', 'D', 'A')),
-                season INTEGER,
+                season INTEGER,  -- ✅ ADDED THIS COLUMN
                 status TEXT DEFAULT 'SCHEDULED',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -152,7 +152,7 @@ class DatabaseManager:
         
         conn.commit()
         conn.close()
-        print("✅ Database initialized with production tables")
+        print("✅ Database initialized with COMPLETE production tables including season column")
     
     def _get_connection(self):
         """Get database connection with error handling"""
@@ -165,30 +165,30 @@ class DatabaseManager:
             raise
     
     def store_prediction(self, match_data, prediction_data, model_version="v2.0"):
-        """Store prediction in database - FIXED VERSION"""
+        """Store prediction in database"""
         conn = self._get_connection()
         
         try:
-            # Store or update match - FIXED: Use correct column names
+            # Store or update match - FIXED with season column
             conn.execute('''
                 INSERT OR REPLACE INTO matches 
-                (match_id, home_team, away_team, league, match_date, season, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (match_id, home_team, away_team, league, match_date, home_goals, away_goals, result, season, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 match_data['match_id'],
                 match_data['home_team'],
                 match_data['away_team'],
                 match_data['league'],
                 match_data.get('match_date'),
-                match_data.get('season', 2024),
+                match_data.get('home_goals'),
+                match_data.get('away_goals'),
+                match_data.get('result'),
+                match_data.get('season', 2024),  # ✅ FIXED: Added season
                 match_data.get('status', 'SCHEDULED')
             ))
             
-            # Store prediction - FIXED: Handle missing features_used gracefully
+            # Store prediction
             for pred_type, pred_data in prediction_data.get('predictions', {}).items():
-                features_used = prediction_data.get('features_used', {})
-                data_quality = prediction_data.get('data_quality', {})
-                
                 conn.execute('''
                     INSERT OR REPLACE INTO predictions 
                     (match_id, prediction_type, prediction_data, confidence, model_version, features_used, data_quality_score)
@@ -199,8 +199,8 @@ class DatabaseManager:
                     json.dumps(pred_data),
                     pred_data.get('confidence', 0.5),
                     model_version,
-                    json.dumps(features_used),
-                    data_quality.get('score', 50)
+                    json.dumps(prediction_data.get('features_used', {})),
+                    prediction_data.get('data_quality', {}).get('score', 50)
                 ))
             
             conn.commit()
@@ -235,18 +235,18 @@ class DatabaseManager:
             conn.close()
     
     def get_training_data(self, days=365):
-        """Get training data for model training - FIXED VERSION"""
+        """Get training data for model training"""
         conn = self._get_connection()
         
         try:
-            # FIXED: Use simpler query that doesn't require joins with predictions table
             query = '''
-                SELECT home_team, away_team, league, home_goals, away_goals, result
-                FROM matches 
-                WHERE result IS NOT NULL
-                AND match_date > date('now', ?)
-                ORDER BY match_date DESC
-                LIMIT 1000
+                SELECT m.home_team, m.away_team, m.league, m.home_goals, m.away_goals, m.result,
+                       p.features_used, p.prediction_data
+                FROM matches m
+                JOIN predictions p ON m.match_id = p.match_id
+                WHERE m.result IS NOT NULL
+                AND m.match_date > date('now', ?)
+                AND p.prediction_type = 'match_outcome'
             '''
             
             df = pd.read_sql_query(query, conn, params=(f'-{days} days',))
@@ -372,6 +372,59 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Error logging API request: {e}")
             return False
+        finally:
+            conn.close()
+    
+    def store_historical_match(self, match_data):
+        """Store historical match data with proper error handling"""
+        conn = self._get_connection()
+        
+        try:
+            match_id = f"{match_data['home_team']}_{match_data['away_team']}_{match_data['date'].replace('-', '')}"
+            
+            conn.execute('''
+                INSERT OR REPLACE INTO matches 
+                (match_id, home_team, away_team, league, match_date, home_goals, away_goals, result, season)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                match_id,
+                match_data['home_team'],
+                match_data['away_team'],
+                match_data['league'],
+                match_data['date'],
+                match_data.get('home_goals'),
+                match_data.get('away_goals'),
+                match_data.get('result'),
+                match_data.get('season', 2024)
+            ))
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error storing historical match: {e}")
+            # Try fallback without season column
+            try:
+                conn.execute('''
+                    INSERT OR REPLACE INTO matches 
+                    (match_id, home_team, away_team, league, match_date, home_goals, away_goals, result)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    match_id,
+                    match_data['home_team'],
+                    match_data['away_team'],
+                    match_data['league'],
+                    match_data['date'],
+                    match_data.get('home_goals'),
+                    match_data.get('away_goals'),
+                    match_data.get('result')
+                ))
+                conn.commit()
+                print(f"✅ Fallback storage successful for {match_data['home_team']} vs {match_data['away_team']}")
+                return True
+            except Exception as fallback_error:
+                print(f"❌ Fallback storage also failed: {fallback_error}")
+                return False
         finally:
             conn.close()
 
