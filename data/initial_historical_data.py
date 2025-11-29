@@ -5,6 +5,7 @@ import os
 import requests
 import sys
 import warnings
+import io
 warnings.filterwarnings('ignore')
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
@@ -51,7 +52,8 @@ class RealHistoricalData:
                 response = requests.get(url, headers=headers, timeout=30)
                 response.raise_for_status()
                 
-                df = pd.read_csv(pd.compat.StringIO(response.text))
+                # FIXED: Use io.StringIO instead of pandas.compat.StringIO
+                df = pd.read_csv(io.StringIO(response.text))
                 
                 if len(df) > 0:
                     processed_matches = self._process_football_data_csv(df, league)
@@ -78,8 +80,8 @@ class RealHistoricalData:
         
         # Store in database
         if all_matches and self.db:
-            self._store_matches_in_database(all_matches)
-            print(f"🎉 Historical data loaded: {len(all_matches)} total matches from {successful_leagues} leagues")
+            stored_count = self._store_matches_in_database(all_matches)
+            print(f"🎉 Historical data loaded: {stored_count} matches stored from {successful_leagues} leagues")
             
             # Update team statistics
             self._update_team_statistics()
@@ -234,19 +236,42 @@ class RealHistoricalData:
             return datetime.now().strftime('%Y-%m-%d')
     
     def _store_matches_in_database(self, matches):
-        """Store matches in SQLite database"""
+        """Store matches in SQLite database - FIXED VERSION"""
         if not self.db:
-            return
+            return 0
             
         print("💾 Storing matches in database...")
         
         conn = self.db._get_connection()
         stored_count = 0
         
+        # First ensure the matches table has the season column
+        try:
+            # Check if season column exists, if not add it
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS matches (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    match_id TEXT UNIQUE,
+                    home_team TEXT NOT NULL,
+                    away_team TEXT NOT NULL,
+                    league TEXT NOT NULL,
+                    match_date DATE,
+                    home_goals INTEGER,
+                    away_goals INTEGER,
+                    result TEXT CHECK(result IN ('H', 'D', 'A')),
+                    season INTEGER,
+                    status TEXT DEFAULT 'SCHEDULED',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+        except Exception as e:
+            print(f"⚠️ Error ensuring table schema: {e}")
+        
         for match in matches:
             try:
                 match_id = f"{match['home_team']}_{match['away_team']}_{match['date'].replace('-', '')}"
                 
+                # FIXED: Use proper column names that exist in the table
                 conn.execute('''
                     INSERT OR REPLACE INTO matches 
                     (match_id, home_team, away_team, league, match_date, home_goals, away_goals, result, season)
@@ -267,11 +292,33 @@ class RealHistoricalData:
                 
             except Exception as e:
                 print(f"⚠️ Error storing match {match.get('home_team', '')} vs {match.get('away_team', '')}: {e}")
+                # Try without season column as fallback
+                try:
+                    match_id = f"{match['home_team']}_{match['away_team']}_{match['date'].replace('-', '')}"
+                    conn.execute('''
+                        INSERT OR REPLACE INTO matches 
+                        (match_id, home_team, away_team, league, match_date, home_goals, away_goals, result)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        match_id,
+                        match['home_team'],
+                        match['away_team'],
+                        match['league'],
+                        match['date'],
+                        match.get('home_goals'),
+                        match.get('away_goals'),
+                        match.get('result')
+                    ))
+                    stored_count += 1
+                    print(f"✅ Fallback storage successful for {match['home_team']} vs {match['away_team']}")
+                except Exception as e2:
+                    print(f"❌ Fallback storage also failed: {e2}")
                 continue
         
         conn.commit()
         conn.close()
         print(f"✅ {stored_count} matches stored in database")
+        return stored_count
     
     def _update_team_statistics(self):
         """Update team statistics after loading historical data"""
