@@ -3,8 +3,8 @@ from datetime import datetime
 
 class Config:
     # API Configuration - NO HARDCODED KEYS!
-    FOOTBALL_DATA_API = os.getenv('FOOTBALL_DATA_API', '')
-    ODDS_API_KEY = os.getenv('ODDS_API_KEY', '')
+    FOOTBALL_DATA_API = os.getenv('FOOTBALL_DATA_API', '3292bc6b3ad4459fa739ede03966a02b')
+    ODDS_API_KEY = os.getenv('ODDS_API_KEY', '8eebed5664851eb764da554b65c5f171')
     
     # API Limits
     REQUESTS_PER_MINUTE = 10
